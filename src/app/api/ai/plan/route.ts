@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { collection, addDoc } from 'firebase/firestore';
+import { ref, push, set } from 'firebase/database';
 import { db } from '@/lib/firebase';
 import OpenAI from 'openai';
 
@@ -47,24 +47,25 @@ Please provide a structured program that includes:
       throw new Error('Failed to generate program');
     }
 
-    // Save the generated program to Firestore
-    const programsRef = collection(db, `users/${userId}/programs`);
+    // Save the generated program to Realtime Database
+    const programsRef = push(ref(db, `users/${userId}/programs`));
     const newProgram = {
+      id: programsRef.key,
       userId,
       name: 'AI Generated Program',
       suggestion: programSuggestion,
       goals,
       experience,
       preferences,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
       blocks: []
     };
 
-    const docRef = await addDoc(programsRef, newProgram);
+    await set(programsRef, newProgram);
 
     return NextResponse.json({
-      programId: docRef.id,
+      programId: programsRef.key,
       suggestion: programSuggestion
     });
   } catch (error) {
