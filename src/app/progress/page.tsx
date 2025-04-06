@@ -4,11 +4,14 @@ import { useState } from 'react';
 import DashboardLayout from '@/components/DashboardLayout';
 import { ProgressChart } from '@/components/ProgressChart';
 import { useWorkoutVolume, usePersonalRecords } from '@/hooks/useWorkouts';
+import { SUPPORTED_EXERCISES, type SupportedExercise } from '@/lib/workout-service';
 
-const exercises = ['All', 'Deadlift', 'Squat', 'Bench Press'];
+type FilterExercise = 'All' | SupportedExercise;
+
+const exercises: FilterExercise[] = ['All', ...SUPPORTED_EXERCISES];
 
 export default function ProgressPage() {
-  const [selectedExercise, setSelectedExercise] = useState<string>('All');
+  const [selectedExercise, setSelectedExercise] = useState<FilterExercise>('All');
   const { volume } = useWorkoutVolume(7);
   const { personalRecords } = usePersonalRecords();
 
@@ -98,7 +101,7 @@ export default function ProgressPage() {
           </div>
           {selectedExercise === 'All' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {exercises.filter(e => e !== 'All').map(exercise => (
+              {SUPPORTED_EXERCISES.map(exercise => (
                 <div key={exercise} className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
                   <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
                     {exercise} Progress (Estimated 1RM)
@@ -114,7 +117,7 @@ export default function ProgressPage() {
               <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
                 {selectedExercise} Progress (Estimated 1RM)
               </h3>
-              <ProgressChart exercise={selectedExercise} />
+              <ProgressChart exercise={selectedExercise as SupportedExercise} />
             </div>
           )}
         </div>
