@@ -1,6 +1,9 @@
-import { ref, set, get, onValue, push, query, orderByChild, limitToLast, off } from 'firebase/database';
-import { db } from './firebase';
+import { getDatabase, ref, push, set, get, onValue, query, orderByChild, limitToLast, off } from 'firebase/database';
+import app from './firebase';
 import { Workout } from './types';
+
+// Initialize Realtime Database
+const db = getDatabase(app);
 
 export type WorkoutInput = Omit<Workout, 'id' | 'userId' | 'createdAt'>;
 
@@ -31,7 +34,7 @@ export async function createWorkout(
       ...workout,
       id: workoutRef.key,
       userId,
-      createdAt: new Date().toISOString()
+      createdAt: Date.now()
     };
     await set(workoutRef, newWorkout);
     return workoutRef.key!;
@@ -60,7 +63,7 @@ export async function updateWorkout(
     await set(workoutRef, {
       ...snapshot.val(),
       ...workout,
-      updatedAt: new Date().toISOString()
+      updatedAt: Date.now()
     });
   } catch (error) {
     console.error('Error updating workout:', error);
@@ -138,13 +141,6 @@ export function subscribeToWorkouts(
     });
 
     callback(workoutsByExercise as Record<SupportedExercise, Workout[]>);
-  }, (error) => {
-    console.error('Error subscribing to workouts:', error);
-    const emptyWorkouts = SUPPORTED_EXERCISES.reduce((acc, exercise) => {
-      acc[exercise] = [];
-      return acc;
-    }, {} as Record<SupportedExercise, Workout[]>);
-    callback(emptyWorkouts);
   });
 
   return () => off(workoutsRef);
@@ -224,8 +220,6 @@ export async function getWeeklyVolume(userId: string): Promise<{
   }
 
   try {
-    const twoWeeksAgo = new Date();
-    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
     const workoutsRef = ref(db, `workouts/${userId}`);
     const snapshot = await get(workoutsRef);
 

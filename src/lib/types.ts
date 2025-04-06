@@ -11,7 +11,8 @@ export interface Workout {
   rpe: number;
   date: string;
   notes?: string;
-  createdAt: Timestamp;
+  createdAt: number;
+  updatedAt?: number;
 }
 
 export interface Message {
