@@ -41,7 +41,6 @@ export default function HomePage() {
       </div>
     );
   }
-
   // This will briefly show while the redirect happens
   return null;
 }

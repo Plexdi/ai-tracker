@@ -8,7 +8,7 @@ export default function WorkoutPlanCard({ plan }: { plan: WorkoutPlan }) {
           Week {plan.week} - Day {plan.day}
         </h3>
         {plan.aiGenerated && (
-          <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+          <span className="text-xs bg-blue-100 text-e-800 px-2 py-1 rounded">
             AI Generated
           </span>
         )}

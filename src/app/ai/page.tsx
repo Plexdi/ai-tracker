@@ -1,39 +1,23 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import DashboardLayout from '../../components/DashboardLayout';
-import { db } from '../../lib/firebase';
-import { collection, addDoc, query, where, orderBy, getDocs } from 'firebase/firestore';
-import { useStore } from '../../lib/zustandStore';
-
-interface Message {
-  id: number;
-  type: 'user' | 'assistant';
-  content: string;
-  timestamp?: string;
-  sessionDate?: string;
-}
-
-interface ChatSession {
-  messages: Message[];
-  date: string;
-}
+import { useRouter } from 'next/navigation';
+import DashboardLayout from '@/components/DashboardLayout';
+import { useStore } from '@/lib/zustandStore';
+import { saveMessage, getTodayMessages, saveChatGPTImport } from '@/lib/chat-service';
+import { getAIResponse } from '@/lib/ai-service';
+import { Message } from '@/lib/types';
+import { toast } from 'react-hot-toast';
 
 const suggestedQuestions = [
-  { id: 1, text: "Generate my next week's program", icon: '📅' },
+  { id: 1, text: "Generate my next week&apos;s program", icon: '📅' },
   { id: 2, text: 'Should I deload this week?', icon: '🔄' },
   { id: 3, text: 'How to improve my squat form?', icon: '🏋️‍♂️' },
   { id: 4, text: 'Recommend a pre-workout meal', icon: '🍎' },
 ];
 
-// Placeholder for Deepseek API call
-const mockDeepseekResponse = async (message: string): Promise<string> => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  return `Here's my response to "${message}". I'm your AI fitness coach powered by Deepseek. I can help you with workout planning, form checks, and nutrition advice.`;
-};
-
 export default function AIAssistantPage() {
+  const router = useRouter();
   const currentUser = useStore((state) => state.currentUser);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
@@ -44,6 +28,13 @@ export default function AIAssistantPage() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const currentDate = new Date().toISOString().split('T')[0];
+
+  // Redirect if not authenticated
+  useEffect(() => {
+    if (!currentUser?.id) {
+      router.push('/login');
+    }
+  }, [currentUser, router]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -59,46 +50,25 @@ export default function AIAssistantPage() {
       if (!currentUser?.id) return;
 
       try {
-        const chatQuery = query(
-          collection(db, 'chatMessages'),
-          where('userId', '==', currentUser.id),
-          where('sessionDate', '==', currentDate),
-          orderBy('timestamp', 'asc')
-        );
-
-        const querySnapshot = await getDocs(chatQuery);
-        const todaysMessages: Message[] = [];
-
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          todaysMessages.push({
-            id: data.id,
-            type: data.type,
-            content: data.content,
-            timestamp: data.timestamp,
-            sessionDate: data.sessionDate,
-          });
-        });
+        const todaysMessages = await getTodayMessages(currentUser.id, currentDate);
 
         if (todaysMessages.length === 0) {
           // Add welcome message if no messages exist for today
           const welcomeMessage: Message = {
             id: Date.now(),
             type: 'assistant',
-            content: "Hello! I'm your AI fitness coach powered by Deepseek. How can I help you today?",
+            content: "Hello! I&apos;m your AI fitness coach powered by Deepseek. How can I help you today?",
             timestamp: new Date().toISOString(),
             sessionDate: currentDate,
           };
-          await addDoc(collection(db, 'chatMessages'), {
-            ...welcomeMessage,
-            userId: currentUser.id,
-          });
+          await saveMessage(welcomeMessage, currentUser.id);
           setMessages([welcomeMessage]);
         } else {
           setMessages(todaysMessages);
         }
       } catch (error) {
         console.error('Error loading chat history:', error);
+        toast.error('Failed to load chat history');
       } finally {
         setIsLoadingHistory(false);
       }
@@ -106,19 +76,6 @@ export default function AIAssistantPage() {
 
     loadChatHistory();
   }, [currentUser?.id, currentDate]);
-
-  const saveMessage = async (message: Message) => {
-    if (!currentUser?.id) return;
-
-    try {
-      await addDoc(collection(db, 'chatMessages'), {
-        ...message,
-        userId: currentUser.id,
-      });
-    } catch (error) {
-      console.error('Error saving message:', error);
-    }
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -137,21 +94,37 @@ export default function AIAssistantPage() {
     setIsLoading(true);
 
     try {
-      await saveMessage(userMessage);
-      const response = await mockDeepseekResponse(input);
+      await saveMessage(userMessage, currentUser.id);
       
+      // Get the latest message to access workout context
+      const messages = await getTodayMessages(currentUser.id, currentDate);
+      const lastAssistantMessage = messages
+        .filter(m => m.type === 'assistant')
+        .pop();
+      
+      const aiResponse = await getAIResponse(
+        input,
+        lastAssistantMessage?.workoutContext
+      );
+      
+      if (aiResponse.error) {
+        throw new Error(aiResponse.error);
+      }
+
       const assistantMessage: Message = {
         id: Date.now(),
         type: 'assistant',
-        content: response,
+        content: aiResponse.content,
         timestamp: new Date().toISOString(),
         sessionDate: currentDate,
       };
 
-      await saveMessage(assistantMessage);
+      await saveMessage(assistantMessage, currentUser.id);
       setMessages(prev => [...prev, assistantMessage]);
     } catch (error) {
       console.error('Error in chat interaction:', error);
+      toast.error('Failed to get AI response');
+      
       const errorMessage: Message = {
         id: Date.now(),
         type: 'assistant',
@@ -159,7 +132,7 @@ export default function AIAssistantPage() {
         timestamp: new Date().toISOString(),
         sessionDate: currentDate,
       };
-      await saveMessage(errorMessage);
+      await saveMessage(errorMessage, currentUser.id);
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
@@ -167,60 +140,64 @@ export default function AIAssistantPage() {
   };
 
   const handleImport = async () => {
-    if (!importText.trim() || importLoading) return;
+    if (!importText.trim() || importLoading || !currentUser?.id) return;
 
     setImportLoading(true);
     try {
-      // Store the imported plan in Firestore
-      await addDoc(collection(db, 'chatGPTImports'), {
-        userId: currentUser?.id,
-        content: importText,
-        timestamp: new Date().toISOString(),
-        processed: false // Flag for whether AI has processed this yet
-      });
-
+      await saveChatGPTImport(importText, currentUser.id);
       setImportText('');
       setShowImport(false);
-      setMessages(prev => [
-        ...prev,
-        {
-          id: Date.now(),
-          type: 'assistant',
-          content: 'ChatGPT plan imported successfully! I\'ll analyze it and help you implement it.',
-          timestamp: new Date().toISOString(),
-          sessionDate: currentDate,
-        },
-      ]);
+      
+      const successMessage: Message = {
+        id: Date.now(),
+        type: 'assistant',
+        content: 'ChatGPT plan imported successfully! I&apos;ll analyze it and help you implement it.',
+        timestamp: new Date().toISOString(),
+        sessionDate: currentDate,
+      };
+      
+      await saveMessage(successMessage, currentUser.id);
+      setMessages(prev => [...prev, successMessage]);
+      toast.success('Plan imported successfully');
     } catch (error) {
       console.error('Error importing plan:', error);
-      setMessages(prev => [
-        ...prev,
-        {
-          id: Date.now(),
-          type: 'assistant',
-          content: 'Sorry, I encountered an error importing the plan. Please try again.',
-          timestamp: new Date().toISOString(),
-          sessionDate: currentDate,
-        },
-      ]);
+      toast.error('Failed to import plan');
+      
+      const errorMessage: Message = {
+        id: Date.now(),
+        type: 'assistant',
+        content: 'Sorry, I encountered an error importing the plan. Please try again.',
+        timestamp: new Date().toISOString(),
+        sessionDate: currentDate,
+      };
+      
+      await saveMessage(errorMessage, currentUser.id);
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setImportLoading(false);
     }
   };
 
+  // Early return if not authenticated
+  if (!currentUser?.id) {
+    return null;
+  }
+
   return (
     <DashboardLayout>
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="max-w-4xl mx-auto space-y-6 px-4 py-6">
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">AI Fitness Coach</h1>
-          <button
-            onClick={() => setShowImport(!showImport)}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 
-              bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 
-              rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-          >
-            Import from ChatGPT
-          </button>
+          {process.env.NEXT_PUBLIC_ENABLE_CHATGPT_IMPORT && (
+            <button
+              onClick={() => setShowImport(!showImport)}
+              className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 
+                bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 
+                rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            >
+              Import from ChatGPT
+            </button>
+          )}
         </div>
 
         {/* ChatGPT Import Section */}
@@ -230,7 +207,7 @@ export default function AIAssistantPage() {
               Import ChatGPT Workout Plan
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Paste your ChatGPT conversation or workout plan below. I'll help you implement it in your training schedule.
+              Paste your ChatGPT conversation or workout plan below. I&apos;ll help you implement it in your training schedule.
             </p>
             <textarea
               value={importText}
@@ -258,6 +235,7 @@ export default function AIAssistantPage() {
                     ? 'bg-blue-400 cursor-not-allowed'
                     : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'
                   } transition-colors`}
+                aria-busy={importLoading}
               >
                 {importLoading ? 'Importing...' : 'Sync Plan'}
               </button>
@@ -274,7 +252,9 @@ export default function AIAssistantPage() {
               className="flex items-center space-x-3 p-4 bg-white dark:bg-gray-800 
                 rounded-xl shadow-md hover:shadow-lg transition-shadow"
             >
-              <span className="text-2xl">{question.icon}</span>
+              <span className="text-2xl" role="img" aria-label={question.text}>
+                {question.icon}
+              </span>
               <span className="text-gray-700 dark:text-gray-300">{question.text}</span>
             </button>
           ))}
@@ -347,6 +327,7 @@ export default function AIAssistantPage() {
                 className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 
                   bg-white dark:bg-gray-700 text-gray-900 dark:text-white p-2.5 
                   focus:ring-2 focus:ring-blue-500"
+                disabled={isLoading}
               />
               <button
                 type="submit"
@@ -356,8 +337,9 @@ export default function AIAssistantPage() {
                     ? 'bg-blue-400 cursor-not-allowed'
                     : 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800'
                 }`}
+                aria-busy={isLoading}
               >
-                Send
+                {isLoading ? 'Sending...' : 'Send'}
               </button>
             </div>
           </form>
