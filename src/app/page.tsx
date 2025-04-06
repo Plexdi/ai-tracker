@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { useStore } from '../lib/zustandStore';
+import { setCookie, deleteCookie } from 'cookies-next';
 import Image from "next/image";
 
 export default function HomePage() {
@@ -15,6 +16,9 @@ export default function HomePage() {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
+        // Set auth cookie for middleware
+        setCookie('auth-state', 'authenticated', { maxAge: 60 * 60 * 24 * 30 }); // 30 days
+        
         setCurrentUser({
           id: user.uid,
           email: user.email || '',
@@ -23,6 +27,9 @@ export default function HomePage() {
         });
         router.push('/dashboard');
       } else {
+        // Clear auth cookie
+        deleteCookie('auth-state');
+        setCurrentUser(null);
         router.push('/login');
       }
       setIsLoading(false);

@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useStore } from '../lib/zustandStore';
 import { signOut as firebaseSignOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { deleteCookie } from 'cookies-next';
 
 interface NavItem {
   href: string;
@@ -31,6 +32,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const handleSignOut = async () => {
     try {
       await firebaseSignOut(auth);
+      // Clear auth cookie on sign out
+      deleteCookie('auth-state');
       setCurrentUser(null);
       router.push('/login');
     } catch (error) {
