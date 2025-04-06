@@ -1,8 +1,7 @@
 import { NextResponse } from 'next/server';
+import { collection, addDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 import OpenAI from 'openai';
-import { db } from '../../../../lib/firebase';
-import { addDoc, collection } from 'firebase/firestore';
-import { WorkoutPlan } from '../../../../types/types';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -10,24 +9,30 @@ const openai = new OpenAI({
 
 export async function POST(request: Request) {
   try {
-    const { userId, focus, experience, daysPerWeek } = await request.json();
+    const { userId, goals, experience, preferences } = await request.json();
 
-    if (!userId || !focus || !experience || !daysPerWeek) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
+    if (!userId) {
+      return NextResponse.json({ error: 'User must be authenticated' }, { status: 401 });
     }
 
-    const prompt = `Generate a detailed ${daysPerWeek}-day workout plan for a ${experience} level lifter focusing on ${focus}. 
-    Include specific exercises, sets, reps, and RPE for each exercise. Format as JSON.`;
+    const prompt = `Create a training program based on the following:
+Goals: ${goals}
+Experience Level: ${experience}
+Preferences: ${preferences}
+
+Please provide a structured program that includes:
+1. Weekly schedule
+2. Exercise selection
+3. Sets and reps
+4. Progressive overload strategy
+5. Recovery recommendations`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: "gpt-3.5-turbo",
       messages: [
         {
           role: "system",
-          content: "You are a professional strength coach. Generate workout plans in valid JSON format."
+          content: "You are a professional fitness coach creating personalized training programs."
         },
         {
           role: "user",
@@ -36,30 +41,36 @@ export async function POST(request: Request) {
       ],
     });
 
-    const planData = JSON.parse(completion.choices[0].message?.content || '{}');
-    
-    // Create workout plans for each day
-    const plans: WorkoutPlan[] = [];
-    for (let day = 1; day <= daysPerWeek; day++) {
-      const plan: WorkoutPlan = {
-        userId,
-        week: 1, // Start with week 1
-        day,
-        exercises: planData[`day${day}`] || [],
-        aiGenerated: true,
-        created: new Date().toISOString(),
-        id: '' // Will be set after Firestore save
-      };
+    const programSuggestion = completion.choices[0]?.message?.content;
 
-      const docRef = await addDoc(collection(db, 'workoutPlans'), plan);
-      plans.push({ ...plan, id: docRef.id });
+    if (!programSuggestion) {
+      throw new Error('Failed to generate program');
     }
 
-    return NextResponse.json(plans);
+    // Save the generated program to Firestore
+    const programsRef = collection(db, `users/${userId}/programs`);
+    const newProgram = {
+      userId,
+      name: 'AI Generated Program',
+      suggestion: programSuggestion,
+      goals,
+      experience,
+      preferences,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      blocks: []
+    };
+
+    const docRef = await addDoc(programsRef, newProgram);
+
+    return NextResponse.json({
+      programId: docRef.id,
+      suggestion: programSuggestion
+    });
   } catch (error) {
-    console.error('Error generating workout plan:', error);
+    console.error('Error generating program:', error);
     return NextResponse.json(
-      { error: 'Failed to generate workout plan' },
+      { error: 'Failed to generate program' },
       { status: 500 }
     );
   }

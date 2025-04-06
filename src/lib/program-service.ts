@@ -1,4 +1,4 @@
-import { ref, set, get, onValue, push, query, orderByChild, off } from 'firebase/database';
+import { collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
 import { db } from './firebase';
 import { Program, TrainingBlock, BlockStatus, WeekDay, ALL_WEEK_DAYS, ProgramWorkout, WeekSchedule } from './types';
 
@@ -11,20 +11,50 @@ export async function createProgram(
   }
 
   try {
-    const programRef = push(ref(db, `users/${userId}/programs`));
+    const programsRef = collection(db, `users/${userId}/programs`);
+    const docRef = await addDoc(programsRef, {
+      userId,
+      name,
+      blocks: [],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+
+    // Update the document with its ID
     const newProgram: Program = {
-      id: programRef.key!,
+      id: docRef.id,
       userId,
       name,
       blocks: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
-    await set(programRef, newProgram);
-    return programRef.key!;
+    await setDoc(docRef, newProgram);
+    return docRef.id;
   } catch (error) {
     console.error('Error creating program:', error);
     throw new Error('Failed to create program');
+  }
+}
+
+export async function getUserProgramId(userId: string): Promise<string | null> {
+  if (!userId) {
+    throw new Error('User ID is required');
+  }
+
+  try {
+    const programsRef = collection(db, `users/${userId}/programs`);
+    const snapshot = await getDocs(programsRef);
+    
+    if (snapshot.empty) {
+      return null;
+    }
+
+    // Get the first program ID (users typically have one program)
+    return snapshot.docs[0].id;
+  } catch (error) {
+    console.error('Error getting user program ID:', error);
+    throw new Error('Failed to get user program ID');
   }
 }
 
@@ -38,13 +68,13 @@ export async function addTrainingBlock(
   }
 
   try {
-    const programRef = ref(db, `users/${userId}/programs/${programId}`);
-    const snapshot = await get(programRef);
-    if (!snapshot.exists()) {
+    const programRef = doc(db, `users/${userId}/programs/${programId}`);
+    const programDoc = await getDoc(programRef);
+    if (!programDoc.exists()) {
       throw new Error('Program not found');
     }
 
-    const program = snapshot.val() as Program;
+    const program = programDoc.data() as Program;
     if (!program.blocks) {
       program.blocks = [];
     }
@@ -63,10 +93,9 @@ export async function addTrainingBlock(
       };
     }
 
-    const blockRef = push(ref(db, `users/${userId}/programs/${programId}/blocks`));
     const newBlock: TrainingBlock = {
       ...block,
-      id: blockRef.key!,
+      id: crypto.randomUUID(),
       status: 'Upcoming',
       weeks,
       createdAt: new Date().toISOString(),
@@ -85,8 +114,8 @@ export async function addTrainingBlock(
 
     program.blocks.push(newBlock);
     program.updatedAt = new Date().toISOString();
-    await set(programRef, program);
-    return blockRef.key!;
+    await setDoc(programRef, program);
+    return newBlock.id;
   } catch (error) {
     console.error('Error adding training block:', error);
     throw new Error('Failed to add training block');
@@ -104,13 +133,13 @@ export async function updateTrainingBlock(
   }
 
   try {
-    const programRef = ref(db, `users/${userId}/programs/${programId}`);
-    const snapshot = await get(programRef);
-    if (!snapshot.exists()) {
+    const programRef = doc(db, `users/${userId}/programs/${programId}`);
+    const programDoc = await getDoc(programRef);
+    if (!programDoc.exists()) {
       throw new Error('Program not found');
     }
 
-    const program = snapshot.val() as Program;
+    const program = programDoc.data() as Program;
     const blockIndex = program.blocks.findIndex(b => b.id === blockId);
     if (blockIndex === -1) {
       throw new Error('Block not found');
@@ -142,7 +171,7 @@ export async function updateTrainingBlock(
     };
 
     program.updatedAt = new Date().toISOString();
-    await set(programRef, program);
+    await setDoc(programRef, program);
   } catch (error) {
     console.error('Error updating training block:', error);
     throw new Error('Failed to update training block');
@@ -159,13 +188,13 @@ export async function deleteTrainingBlock(
   }
 
   try {
-    const programRef = ref(db, `users/${userId}/programs/${programId}`);
-    const snapshot = await get(programRef);
-    if (!snapshot.exists()) {
+    const programRef = doc(db, `users/${userId}/programs/${programId}`);
+    const programDoc = await getDoc(programRef);
+    if (!programDoc.exists()) {
       throw new Error('Program not found');
     }
 
-    const program = snapshot.val() as Program;
+    const program = programDoc.data() as Program;
     program.blocks = program.blocks.filter(b => b.id !== blockId);
     
     // Recalculate weeks for remaining blocks
@@ -177,7 +206,7 @@ export async function deleteTrainingBlock(
       currentWeek = block.endWeek + 1;
     });
 
-    await set(programRef, program);
+    await setDoc(programRef, program);
   } catch (error) {
     console.error('Error deleting training block:', error);
     throw new Error('Failed to delete training block');
@@ -194,21 +223,21 @@ export function subscribeToProgram(
     return () => {};
   }
 
-  const programRef = ref(db, `users/${userId}/programs/${programId}`);
-  const listener = onValue(programRef, (snapshot) => {
+  const programRef = doc(db, `users/${userId}/programs/${programId}`);
+  const unsubscribe = onSnapshot(programRef, (snapshot) => {
     if (!snapshot.exists()) {
       callback(null);
       return;
     }
 
-    const program = snapshot.val() as Program;
+    const program = snapshot.data() as Program;
     callback(program);
   }, (error) => {
     console.error('Error subscribing to program:', error);
     callback(null);
   });
 
-  return () => off(programRef);
+  return unsubscribe;
 }
 
 export async function setCurrentBlock(
@@ -221,13 +250,13 @@ export async function setCurrentBlock(
   }
 
   try {
-    const programRef = ref(db, `users/${userId}/programs/${programId}`);
-    const snapshot = await get(programRef);
-    if (!snapshot.exists()) {
+    const programRef = doc(db, `users/${userId}/programs/${programId}`);
+    const programDoc = await getDoc(programRef);
+    if (!programDoc.exists()) {
       throw new Error('Program not found');
     }
 
-    const program = snapshot.val() as Program;
+    const program = programDoc.data() as Program;
     const blockIndex = program.blocks.findIndex(b => b.id === blockId);
     if (blockIndex === -1) {
       throw new Error('Block not found');
@@ -247,7 +276,7 @@ export async function setCurrentBlock(
     program.currentBlockId = blockId;
     program.updatedAt = new Date().toISOString();
 
-    await set(programRef, program);
+    await setDoc(programRef, program);
   } catch (error) {
     console.error('Error setting current block:', error);
     throw new Error('Failed to set current block');
@@ -266,13 +295,13 @@ export async function updateWeekWorkouts(
   }
 
   try {
-    const programRef = ref(db, `users/${userId}/programs/${programId}`);
-    const snapshot = await get(programRef);
-    if (!snapshot.exists()) {
+    const programRef = doc(db, `users/${userId}/programs/${programId}`);
+    const programDoc = await getDoc(programRef);
+    if (!programDoc.exists()) {
       throw new Error('Program not found');
     }
 
-    const program = snapshot.val() as Program;
+    const program = programDoc.data() as Program;
     const blockIndex = program.blocks.findIndex(b => b.id === blockId);
     if (blockIndex === -1) {
       throw new Error('Block not found');
@@ -293,32 +322,9 @@ export async function updateWeekWorkouts(
     program.blocks[blockIndex].updatedAt = new Date().toISOString();
     program.updatedAt = new Date().toISOString();
 
-    await set(programRef, program);
+    await setDoc(programRef, program);
   } catch (error) {
     console.error('Error updating week workouts:', error);
     throw new Error('Failed to update week workouts');
-  }
-}
-
-export async function getUserProgramId(userId: string): Promise<string | null> {
-  if (!userId) {
-    throw new Error('User ID is required');
-  }
-
-  try {
-    const programsRef = ref(db, `users/${userId}/programs`);
-    const snapshot = await get(programsRef);
-    
-    if (!snapshot.exists()) {
-      return null;
-    }
-
-    // Get the first program ID (users typically have one program)
-    const programs = snapshot.val();
-    const programId = Object.keys(programs)[0];
-    return programId;
-  } catch (error) {
-    console.error('Error getting user program ID:', error);
-    throw new Error('Failed to get user program ID');
   }
 } 
