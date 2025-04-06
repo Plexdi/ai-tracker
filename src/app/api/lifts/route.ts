@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDatabase, ref, push, set, get, child } from 'firebase/database';
-import { app } from '@/lib/firebase';
+import app from '@/lib/firebase'; 
 import { LiftLog } from '@/types/types';
 
 const db = getDatabase(app);
