@@ -1,6 +1,6 @@
 import { collection, addDoc, query, where, orderBy, getDocs, limit } from 'firebase/firestore';
 import { db } from './firebase';
-import { Message, ChatGPTImport } from './types';
+import { Message, ChatGPTImport, Workout } from './types';
 import { getRecentWorkouts, getPersonalRecords, getWeeklyVolume } from './workout-service';
 
 export async function saveMessage(message: Message, userId: string): Promise<void> {
@@ -11,11 +11,21 @@ export async function saveMessage(message: Message, userId: string): Promise<voi
   try {
     // Get workout context for AI responses
     if (message.type === 'assistant') {
-      const [recentWorkouts, currentPRs, weeklyVolume] = await Promise.all([
+      const [recentWorkouts, prs, weeklyVolume] = await Promise.all([
         getRecentWorkouts(userId),
         getPersonalRecords(userId),
         getWeeklyVolume(userId)
       ]);
+
+      // Transform PRs into Record<string, number> using Brzycki formula for 1RM
+      const currentPRs: Record<string, number> = Object.fromEntries(
+        Object.entries(prs).map(([exercise, workout]) => {
+          const weight = workout.unit === 'lbs' ? workout.weight * 0.453592 : workout.weight;
+          // Estimate 1RM using Brzycki formula
+          const oneRM = weight * (36 / (37 - workout.reps));
+          return [exercise, Math.round(oneRM)];
+        })
+      );
 
       message.workoutContext = {
         recentWorkouts,
