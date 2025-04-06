@@ -1,5 +1,3 @@
-import { Timestamp } from 'firebase/firestore';
-
 export interface Workout {
   id?: string;
   userId: string;
@@ -16,16 +14,11 @@ export interface Workout {
 }
 
 export interface Message {
-  id: number;
-  type: 'user' | 'assistant';
+  id: string;
   content: string;
-  timestamp: string;
-  sessionDate: string;
-  workoutContext?: {
-    recentWorkouts: Workout[];
-    currentPRs: Record<string, number>;
-    weeklyVolume: number;
-  };
+  role: 'user' | 'assistant';
+  currentPRs: Record<string, number>;
+  createdAt: number;
 }
 
 export interface ChatGPTImport {
@@ -76,8 +69,8 @@ export type TrainingBlock = {
   weeks: Record<number, WeekSchedule>;  // Key is the week number
   notes?: string;
   status: BlockStatus;
-  createdAt: string;
-  updatedAt: string;
+  createdAt: number;
+  updatedAt: number;
 };
 
 export interface Program {
@@ -85,7 +78,7 @@ export interface Program {
   userId: string;
   name: string;
   blocks: TrainingBlock[];
-  createdAt: string;
-  updatedAt: string;
+  createdAt: number;
+  updatedAt: number;
   currentBlockId?: string;
 } 

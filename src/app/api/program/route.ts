@@ -1,41 +1,36 @@
 import { NextResponse } from 'next/server';
-import { db } from '../../../lib/firebase';
-import { collection, query, where, getDocs } from 'firebase/firestore';
-import { WorkoutPlan } from '../../../types/types';
+import { getDatabase, ref, get, query, orderByChild, equalTo } from 'firebase/database';
+import app from '@/lib/firebase';
+import { Program } from '@/lib/types';
+
+const db = getDatabase(app);
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const userId = searchParams.get('userId');
-    const week = searchParams.get('week');
 
-    if (!userId || !week) {
-      return NextResponse.json(
-        { error: 'userId and week are required' },
-        { status: 400 }
-      );
+    if (!userId) {
+      return NextResponse.json({ error: 'User ID is required' }, { status: 400 });
     }
 
-    const q = query(
-      collection(db, 'workoutPlans'),
-      where('userId', '==', userId),
-      where('week', '==', parseInt(week))
-    );
+    const programsRef = ref(db, `users/${userId}/programs`);
+    const snapshot = await get(programsRef);
 
-    const querySnapshot = await getDocs(q);
-    const plans: WorkoutPlan[] = [];
-    
-    querySnapshot.forEach((doc) => {
-      plans.push({
-        id: doc.id,
-        ...doc.data()
-      } as WorkoutPlan);
+    if (!snapshot.exists()) {
+      return NextResponse.json({ programs: [] });
+    }
+
+    const programs: Program[] = [];
+    snapshot.forEach((childSnapshot) => {
+      programs.push(childSnapshot.val() as Program);
     });
 
-    return NextResponse.json(plans);
+    return NextResponse.json({ programs });
   } catch (error) {
+    console.error('Error fetching programs:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch workout plans' },
+      { error: 'Failed to fetch programs' },
       { status: 500 }
     );
   }

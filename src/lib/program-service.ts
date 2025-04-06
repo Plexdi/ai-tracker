@@ -1,6 +1,9 @@
-import { collection, doc, setDoc, getDoc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, query, where, orderBy } from 'firebase/firestore';
-import { db } from './firebase';
+import { getDatabase, ref, push, set, get, onValue, off, child } from 'firebase/database';
+import app from './firebase';
 import { Program, TrainingBlock, BlockStatus, WeekDay, ALL_WEEK_DAYS, ProgramWorkout, WeekSchedule } from './types';
+
+// Initialize Realtime Database
+const db = getDatabase(app);
 
 export async function createProgram(
   userId: string,
@@ -11,26 +14,18 @@ export async function createProgram(
   }
 
   try {
-    const programsRef = collection(db, `users/${userId}/programs`);
-    const docRef = await addDoc(programsRef, {
-      userId,
-      name,
-      blocks: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    });
-
-    // Update the document with its ID
+    const programRef = push(ref(db, `users/${userId}/programs`));
     const newProgram: Program = {
-      id: docRef.id,
+      id: programRef.key!,
       userId,
       name,
       blocks: [],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     };
-    await setDoc(docRef, newProgram);
-    return docRef.id;
+    
+    await set(programRef, newProgram);
+    return programRef.key!;
   } catch (error) {
     console.error('Error creating program:', error);
     throw new Error('Failed to create program');
@@ -43,15 +38,17 @@ export async function getUserProgramId(userId: string): Promise<string | null> {
   }
 
   try {
-    const programsRef = collection(db, `users/${userId}/programs`);
-    const snapshot = await getDocs(programsRef);
+    const programsRef = ref(db, `users/${userId}/programs`);
+    const snapshot = await get(programsRef);
     
-    if (snapshot.empty) {
+    if (!snapshot.exists()) {
       return null;
     }
 
     // Get the first program ID (users typically have one program)
-    return snapshot.docs[0].id;
+    const programs = snapshot.val();
+    const firstProgramId = Object.keys(programs)[0];
+    return firstProgramId;
   } catch (error) {
     console.error('Error getting user program ID:', error);
     throw new Error('Failed to get user program ID');
@@ -68,13 +65,13 @@ export async function addTrainingBlock(
   }
 
   try {
-    const programRef = doc(db, `users/${userId}/programs/${programId}`);
-    const programDoc = await getDoc(programRef);
-    if (!programDoc.exists()) {
+    const programRef = ref(db, `users/${userId}/programs/${programId}`);
+    const snapshot = await get(programRef);
+    if (!snapshot.exists()) {
       throw new Error('Program not found');
     }
 
-    const program = programDoc.data() as Program;
+    const program = snapshot.val() as Program;
     if (!program.blocks) {
       program.blocks = [];
     }
@@ -98,8 +95,8 @@ export async function addTrainingBlock(
       id: crypto.randomUUID(),
       status: 'Upcoming',
       weeks,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      createdAt: Date.now(),
+      updatedAt: Date.now()
     };
 
     // Update block weeks based on existing blocks
@@ -113,8 +110,8 @@ export async function addTrainingBlock(
     }
 
     program.blocks.push(newBlock);
-    program.updatedAt = new Date().toISOString();
-    await setDoc(programRef, program);
+    program.updatedAt = Date.now();
+    await set(programRef, program);
     return newBlock.id;
   } catch (error) {
     console.error('Error adding training block:', error);
@@ -133,13 +130,13 @@ export async function updateTrainingBlock(
   }
 
   try {
-    const programRef = doc(db, `users/${userId}/programs/${programId}`);
-    const programDoc = await getDoc(programRef);
-    if (!programDoc.exists()) {
+    const programRef = ref(db, `users/${userId}/programs/${programId}`);
+    const snapshot = await get(programRef);
+    if (!snapshot.exists()) {
       throw new Error('Program not found');
     }
 
-    const program = programDoc.data() as Program;
+    const program = snapshot.val() as Program;
     const blockIndex = program.blocks.findIndex(b => b.id === blockId);
     if (blockIndex === -1) {
       throw new Error('Block not found');
@@ -167,11 +164,11 @@ export async function updateTrainingBlock(
     program.blocks[blockIndex] = {
       ...program.blocks[blockIndex],
       ...updates,
-      updatedAt: new Date().toISOString()
+      updatedAt: Date.now()
     };
 
-    program.updatedAt = new Date().toISOString();
-    await setDoc(programRef, program);
+    program.updatedAt = Date.now();
+    await set(programRef, program);
   } catch (error) {
     console.error('Error updating training block:', error);
     throw new Error('Failed to update training block');
@@ -188,13 +185,13 @@ export async function deleteTrainingBlock(
   }
 
   try {
-    const programRef = doc(db, `users/${userId}/programs/${programId}`);
-    const programDoc = await getDoc(programRef);
-    if (!programDoc.exists()) {
+    const programRef = ref(db, `users/${userId}/programs/${programId}`);
+    const snapshot = await get(programRef);
+    if (!snapshot.exists()) {
       throw new Error('Program not found');
     }
 
-    const program = programDoc.data() as Program;
+    const program = snapshot.val() as Program;
     program.blocks = program.blocks.filter(b => b.id !== blockId);
     
     // Recalculate weeks for remaining blocks
@@ -206,7 +203,7 @@ export async function deleteTrainingBlock(
       currentWeek = block.endWeek + 1;
     });
 
-    await setDoc(programRef, program);
+    await set(programRef, program);
   } catch (error) {
     console.error('Error deleting training block:', error);
     throw new Error('Failed to delete training block');
@@ -223,21 +220,21 @@ export function subscribeToProgram(
     return () => {};
   }
 
-  const programRef = doc(db, `users/${userId}/programs/${programId}`);
-  const unsubscribe = onSnapshot(programRef, (snapshot) => {
+  const programRef = ref(db, `users/${userId}/programs/${programId}`);
+  const unsubscribe = onValue(programRef, (snapshot) => {
     if (!snapshot.exists()) {
       callback(null);
       return;
     }
 
-    const program = snapshot.data() as Program;
+    const program = snapshot.val() as Program;
     callback(program);
   }, (error) => {
     console.error('Error subscribing to program:', error);
     callback(null);
   });
 
-  return unsubscribe;
+  return () => off(programRef);
 }
 
 export async function setCurrentBlock(
@@ -250,13 +247,13 @@ export async function setCurrentBlock(
   }
 
   try {
-    const programRef = doc(db, `users/${userId}/programs/${programId}`);
-    const programDoc = await getDoc(programRef);
-    if (!programDoc.exists()) {
+    const programRef = ref(db, `users/${userId}/programs/${programId}`);
+    const snapshot = await get(programRef);
+    if (!snapshot.exists()) {
       throw new Error('Program not found');
     }
 
-    const program = programDoc.data() as Program;
+    const program = snapshot.val() as Program;
     const blockIndex = program.blocks.findIndex(b => b.id === blockId);
     if (blockIndex === -1) {
       throw new Error('Block not found');
@@ -274,9 +271,9 @@ export async function setCurrentBlock(
     });
 
     program.currentBlockId = blockId;
-    program.updatedAt = new Date().toISOString();
+    program.updatedAt = Date.now();
 
-    await setDoc(programRef, program);
+    await set(programRef, program);
   } catch (error) {
     console.error('Error setting current block:', error);
     throw new Error('Failed to set current block');
@@ -295,13 +292,13 @@ export async function updateWeekWorkouts(
   }
 
   try {
-    const programRef = doc(db, `users/${userId}/programs/${programId}`);
-    const programDoc = await getDoc(programRef);
-    if (!programDoc.exists()) {
+    const programRef = ref(db, `users/${userId}/programs/${programId}`);
+    const snapshot = await get(programRef);
+    if (!snapshot.exists()) {
       throw new Error('Program not found');
     }
 
-    const program = programDoc.data() as Program;
+    const program = snapshot.val() as Program;
     const blockIndex = program.blocks.findIndex(b => b.id === blockId);
     if (blockIndex === -1) {
       throw new Error('Block not found');
@@ -319,10 +316,10 @@ export async function updateWeekWorkouts(
     }
 
     program.blocks[blockIndex].weeks[weekNumber] = weekData;
-    program.blocks[blockIndex].updatedAt = new Date().toISOString();
-    program.updatedAt = new Date().toISOString();
+    program.blocks[blockIndex].updatedAt = Date.now();
+    program.updatedAt = Date.now();
 
-    await setDoc(programRef, program);
+    await set(programRef, program);
   } catch (error) {
     console.error('Error updating week workouts:', error);
     throw new Error('Failed to update week workouts');
