@@ -1,16 +1,25 @@
 import { NextResponse } from 'next/server';
-import { db } from '../../../lib/firebase';
-import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
-import { LiftLog } from '../../../types/types';
+import { getDatabase, ref, push, set, get, child } from 'firebase/database';
+import { app } from '@/lib/firebase';
+import { LiftLog } from '@/types/types';
+
+const db = getDatabase(app);
 
 export async function POST(request: Request) {
   try {
     const data = await request.json();
-    const docRef = await addDoc(collection(db, 'liftLogs'), data);
-    
-    return NextResponse.json({ 
-      ...data, 
-      id: docRef.id 
+    const userId = data.userId || 'unknown';
+
+    const liftRef = push(ref(db, `liftLogs/${userId}`));
+    await set(liftRef, {
+      ...data,
+      id: liftRef.key,
+      createdAt: Date.now(),
+    });
+
+    return NextResponse.json({
+      ...data,
+      id: liftRef.key,
     });
   } catch (error) {
     return NextResponse.json(
@@ -32,20 +41,17 @@ export async function GET(request: Request) {
       );
     }
 
-    const q = query(
-      collection(db, 'liftLogs'),
-      where('userId', '==', userId)
-    );
+    const snapshot = await get(child(ref(db), `liftLogs/${userId}`));
 
-    const querySnapshot = await getDocs(q);
-    const logs: LiftLog[] = [];
-    
-    querySnapshot.forEach((doc) => {
-      logs.push({
-        id: doc.id,
-        ...doc.data()
-      } as LiftLog);
-    });
+    if (!snapshot.exists()) {
+      return NextResponse.json([]);
+    }
+
+    const data = snapshot.val();
+    const logs: LiftLog[] = Object.keys(data).map((key) => ({
+      id: key,
+      ...data[key],
+    }));
 
     return NextResponse.json(logs);
   } catch (error) {
@@ -54,4 +60,4 @@ export async function GET(request: Request) {
       { status: 500 }
     );
   }
-} 
+}
