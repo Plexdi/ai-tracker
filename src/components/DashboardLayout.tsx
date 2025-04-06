@@ -4,7 +4,8 @@ import { ReactNode, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useStore } from '../lib/zustandStore';
-import { signOut } from '../lib/firebase';
+import { signOut as firebaseSignOut } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 interface NavItem {
   href: string;
@@ -24,14 +25,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const currentUser = useStore((state) => state.currentUser);
+  const setCurrentUser = useStore((state) => state.setCurrentUser);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  const handleLogout = async () => {
+  const handleSignOut = async () => {
     try {
-      await signOut();
+      await firebaseSignOut(auth);
+      setCurrentUser(null);
       router.push('/login');
     } catch (error) {
-      console.error('Logout error:', error);
+      console.error('Error signing out:', error);
     }
   };
 
@@ -87,7 +90,7 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           </p>
         </div>
         <button
-          onClick={handleLogout}
+          onClick={handleSignOut}
           className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
         >
           <span className="text-sm">⇥</span>
