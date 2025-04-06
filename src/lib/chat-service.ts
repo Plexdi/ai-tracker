@@ -8,7 +8,7 @@ export async function createMessage(
   userId: string,
   content: string,
   role: 'user' | 'assistant',
-  currentPRs: Record<string, number>
+  currentPRs?: Record<string, number>
 ): Promise<void> {
   if (!userId) {
     throw new Error('User must be authenticated to create a message');
@@ -17,12 +17,15 @@ export async function createMessage(
   try {
     const messagesRef = ref(db, `users/${userId}/messages`);
     const newMessageRef = push(messagesRef);
+    const now = Date.now();
     const message: Message = {
       id: newMessageRef.key!,
       content,
-      role,
+      type: role, // For backward compatibility
+      role,      // New field
       currentPRs,
-      createdAt: Date.now()
+      createdAt: now,
+      timestamp: new Date(now).toISOString() // For backward compatibility
     };
 
     await set(newMessageRef, message);
@@ -70,11 +73,15 @@ export async function saveMessage(message: Message, userId: string): Promise<voi
   try {
     const messagesRef = ref(db, `users/${userId}/messages`);
     const newMessageRef = push(messagesRef);
+    const now = Date.now();
     
     const messageToSave = {
       ...message,
       id: newMessageRef.key!,
-      createdAt: Date.now()
+      createdAt: now,
+      timestamp: new Date(now).toISOString(), // For backward compatibility
+      type: message.type || message.role,     // Ensure type is set
+      role: message.role || message.type      // Ensure role is set
     };
 
     await set(newMessageRef, messageToSave);

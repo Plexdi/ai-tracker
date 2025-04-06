@@ -54,12 +54,14 @@ export default function AIAssistantPage() {
 
         if (todaysMessages.length === 0) {
           // Add welcome message if no messages exist for today
+          const now = Date.now();
           const welcomeMessage: Message = {
-            id: Date.now(),
+            id: now.toString(),
             type: 'assistant',
             content: "Hello! I&apos;m your AI fitness coach powered by Deepseek. How can I help you today?",
-            timestamp: new Date().toISOString(),
+            timestamp: new Date(now).toISOString(),
             sessionDate: currentDate,
+            createdAt: now
           };
           await saveMessage(welcomeMessage, currentUser.id);
           setMessages([welcomeMessage]);
@@ -82,11 +84,12 @@ export default function AIAssistantPage() {
     if (!input.trim() || isLoading || !currentUser?.id) return;
 
     const userMessage: Message = {
-      id: Date.now(),
+      id: Date.now().toString(),
       type: 'user',
       content: input.trim(),
       timestamp: new Date().toISOString(),
       sessionDate: currentDate,
+      createdAt: Date.now()
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -102,9 +105,16 @@ export default function AIAssistantPage() {
         .filter(m => m.type === 'assistant')
         .pop();
       
+      // Ensure workoutContext has all required fields
+      const workoutContext = lastAssistantMessage?.workoutContext && {
+        recentWorkouts: lastAssistantMessage.workoutContext.recentWorkouts ?? [],
+        currentPRs: lastAssistantMessage.workoutContext.currentPRs ?? {},
+        weeklyVolume: lastAssistantMessage.workoutContext.weeklyVolume ?? 0
+      };
+      
       const aiResponse = await getAIResponse(
         input,
-        lastAssistantMessage?.workoutContext
+        workoutContext
       );
       
       if (aiResponse.error) {
@@ -112,11 +122,12 @@ export default function AIAssistantPage() {
       }
 
       const assistantMessage: Message = {
-        id: Date.now(),
+        id: Date.now().toString(),
         type: 'assistant',
         content: aiResponse.content,
         timestamp: new Date().toISOString(),
         sessionDate: currentDate,
+        createdAt: Date.now()
       };
 
       await saveMessage(assistantMessage, currentUser.id);
@@ -126,11 +137,12 @@ export default function AIAssistantPage() {
       toast.error('Failed to get AI response');
       
       const errorMessage: Message = {
-        id: Date.now(),
+        id: Date.now().toString(),
         type: 'assistant',
         content: 'Sorry, I encountered an error. Please try again.',
         timestamp: new Date().toISOString(),
         sessionDate: currentDate,
+        createdAt: Date.now()
       };
       await saveMessage(errorMessage, currentUser.id);
       setMessages(prev => [...prev, errorMessage]);
@@ -149,11 +161,12 @@ export default function AIAssistantPage() {
       setShowImport(false);
       
       const successMessage: Message = {
-        id: Date.now(),
+        id: Date.now().toString(),
         type: 'assistant',
         content: 'ChatGPT plan imported successfully! I&apos;ll analyze it and help you implement it.',
         timestamp: new Date().toISOString(),
         sessionDate: currentDate,
+        createdAt: Date.now()
       };
       
       await saveMessage(successMessage, currentUser.id);
@@ -164,11 +177,12 @@ export default function AIAssistantPage() {
       toast.error('Failed to import plan');
       
       const errorMessage: Message = {
-        id: Date.now(),
+        id: Date.now().toString(),
         type: 'assistant',
         content: 'Sorry, I encountered an error importing the plan. Please try again.',
         timestamp: new Date().toISOString(),
         sessionDate: currentDate,
+        createdAt: Date.now()
       };
       
       await saveMessage(errorMessage, currentUser.id);

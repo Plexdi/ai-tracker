@@ -40,3 +40,11 @@ export interface WeeklyProgress {
   maxWeight: number;
   exercise: string;
 } 
+
+export interface Message {
+  id: string;
+  type: 'assistant' | 'user'; // ← Add this
+  content: string;
+  timestamp: string;
+  sessionDate?: string;
+}

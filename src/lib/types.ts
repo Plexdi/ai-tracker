@@ -16,9 +16,17 @@ export interface Workout {
 export interface Message {
   id: string;
   content: string;
-  role: 'user' | 'assistant';
-  currentPRs: Record<string, number>;
+  type?: 'user' | 'assistant';
+  role?: 'user' | 'assistant';
+  timestamp?: string;
   createdAt: number;
+  currentPRs?: Record<string, number>;
+  sessionDate?: string;
+  workoutContext?: {
+    recentWorkouts?: Workout[];
+    currentPRs?: Record<string, number>;
+    weeklyVolume?: number;
+  };
 }
 
 export interface ChatGPTImport {
