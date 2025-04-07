@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useProgram } from '@/hooks/useProgram';
-import { TrainingBlock, WeekDay, ProgramWorkout, ALL_WEEK_DAYS, WeekSchedule } from '@/lib/types';
+import { TrainingBlock, WeekDay, ProgramWorkout, ALL_WEEK_DAYS, WeekSchedule, Program } from '@/lib/types';
 import { SUPPORTED_EXERCISES } from '@/lib/workout-service';
 import { useStore } from '@/lib/zustandStore';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -14,6 +14,9 @@ import GlassCard from '@/components/GlassCard';
 import GridContainer from '@/components/GridContainer';
 import ModernButton from '@/components/ModernButton';
 import { updateWeekWorkouts, getUserProgramId } from '@/lib/program-service';
+import { calculateRemainingTime, calculateTotalProgramWeeks, calculateProgramEndDate } from '@/lib/utils';
+import EditProgramModal from '@/components/EditProgramModal';
+import CreateProgramModal from '@/components/CreateProgramModal';
 
 interface BlockFormData {
   name: string;
@@ -43,10 +46,8 @@ export default function PlanPage() {
   const currentUser = useStore((state) => state.currentUser);
   const [programId, setProgramId] = useState<string | undefined>();
   const [showProgramForm, setShowProgramForm] = useState(false);
-  const [programFormData, setProgramFormData] = useState<ProgramFormData>({
-    name: '',
-  });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
 
   const {
     program,
@@ -57,6 +58,9 @@ export default function PlanPage() {
     updateBlock,
     deleteBlock,
     setActiveBlock,
+    updateProgramDetails,
+    deleteCurrentProgram,
+    checkCompletedPrograms,
   } = useProgram(programId);
 
   const [showBlockForm, setShowBlockForm] = useState(false);
@@ -81,6 +85,8 @@ export default function PlanPage() {
 
   const [selectedWeek, setSelectedWeek] = useState<number | null>(null);
   const [expandedBlockId, setExpandedBlockId] = useState<string | null>(null);
+  const [showEditProgramModal, setShowEditProgramModal] = useState(false);
+  const [programToDelete, setProgramToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -105,29 +111,55 @@ export default function PlanPage() {
         console.error('Error fetching program ID:', error);
         toast.error('Failed to load program');
       }
+
+      // Check for completed programs every time the component mounts
+      if (user) {
+        try {
+          await checkCompletedPrograms();
+        } catch (error) {
+          console.error('Error checking completed programs:', error);
+        }
+      }
     });
 
     return () => unsubscribe();
   }, [router, setCurrentUser]);
 
-  const handleCreateProgram = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Function to automatically update the program end date when blocks change
+  useEffect(() => {
+    if (program && program.blocks && program.startDate && program.blocks.length > 0) {
+      const totalWeeks = calculateTotalProgramWeeks(program.blocks);
+      const calculatedEndDate = calculateProgramEndDate(program.startDate, totalWeeks);
+      
+      // Only update if end date has changed
+      if (!program.endDate || program.endDate !== calculatedEndDate) {
+        updateProgramDetails({
+          endDate: calculatedEndDate
+        }).catch(console.error);
+      }
+    }
+  }, [program?.blocks]);
+
+  const handleCreateProgram = async (
+    name: string, 
+    startDate: number, 
+    daysPerWeek: number, 
+    initialBlock?: Omit<TrainingBlock, 'id' | 'createdAt' | 'updatedAt'>
+  ) => {
     if (!currentUser?.id) {
       toast.error('Please log in to create a program');
-      return;
+      return '';
     }
 
-    setIsSubmitting(true);
     try {
-      const id = await createNewProgram(programFormData.name);
+      const id = await createNewProgram(name, startDate, daysPerWeek, initialBlock);
       setProgramId(id);
-      setShowProgramForm(false);
       toast.success('Program created successfully!');
+      return id;
     } catch (error) {
       console.error('Failed to create program:', error);
       toast.error('Failed to create program');
-    } finally {
-      setIsSubmitting(false);
+      throw error;
     }
   };
 
@@ -193,7 +225,7 @@ export default function PlanPage() {
 
   const handleUpdateBlock = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingBlockId || !program || !currentUser?.id) {
+    if (!editingBlockId || !program || !currentUser?.id || !program.blocks) {
       toast.error('Unable to update block: Missing required information');
       return;
     }
@@ -223,7 +255,7 @@ export default function PlanPage() {
             ...existingWeeks[week],
             days: blockFormData.workoutDays.reduce((acc, day) => {
               // Keep existing workouts for selected days
-              acc[day] = existingWeeks[week]?.days[day] || [];
+              acc[day] = existingWeeks[week]?.days?.[day] || [];
               return acc;
             }, {} as Record<WeekDay, ProgramWorkout[]>)
           };
@@ -263,7 +295,7 @@ export default function PlanPage() {
 
   const handleDeleteBlock = async (blockId: string) => {
     if (!confirm('Are you sure you want to delete this block?')) return;
-    if (!program) {
+    if (!program || !program.blocks) {
       toast.error('Unable to delete block: Program not found');
       return;
     }
@@ -308,7 +340,7 @@ export default function PlanPage() {
 
     setIsSubmitting(true);
     try {
-      const block = program.blocks.find(b => b.id === selectedBlockId);
+      const block = program.blocks?.find(b => b.id === selectedBlockId);
       if (!block) {
         toast.error('Block not found');
         return;
@@ -355,13 +387,13 @@ export default function PlanPage() {
     }
 
     try {
-      const block = program.blocks.find(b => b.id === blockId);
+      const block = program.blocks?.find(b => b.id === blockId);
       if (!block) {
         toast.error('Block not found');
         return;
       }
 
-      const weekSchedule = block.weeks[weekNumber];
+      const weekSchedule = block.weeks?.[weekNumber];
       if (!weekSchedule) {
         toast.error('Week schedule not found');
         return;
@@ -371,7 +403,7 @@ export default function PlanPage() {
         ...weekSchedule,
         days: {
           ...weekSchedule.days,
-          [day]: weekSchedule.days[day].filter((_, i) => i !== index)
+          [day]: (weekSchedule.days?.[day] || []).filter((_, i) => i !== index)
         }
       };
 
@@ -383,229 +415,386 @@ export default function PlanPage() {
     }
   };
 
-  if (!currentUser) {
-    return (
-      <ModernLayout title="Training Plans" description="Create and manage your workout programs">
-        <div className="flex flex-col items-center justify-center min-h-screen p-6">
-          <h1 className="text-2xl font-bold mb-4">Welcome to Training Programs</h1>
-          <p className="text-gray-600 dark:text-gray-400 mb-8">
-            Please log in to create and manage your training programs.
-          </p>
-          <button
-            onClick={() => router.push('/login')}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Log In
-          </button>
-        </div>
-      </ModernLayout>
-    );
-  }
+  const handleProgramUpdate = async (updates: Partial<Program>) => {
+    if (!program) return;
+    await updateProgramDetails(updates);
+  };
 
-  if (loading) {
-    return (
-      <ModernLayout title="Training Plans" description="Create and manage your workout programs">
-        <div className="flex items-center justify-center min-h-screen">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-        </div>
-      </ModernLayout>
-    );
-  }
+  const handleDeleteProgram = async () => {
+    if (!program) return;
+    
+    try {
+      await deleteCurrentProgram();
+      setProgramId(undefined);
+      setShowDeleteConfirmation(false);
+      toast.success('Program deleted successfully.');
+    } catch (error) {
+      console.error('Failed to delete program:', error);
+      toast.error('Failed to delete program');
+    }
+  };
 
-  if (!program && !loading) {
-    return (
-      <ModernLayout title="Training Plans" description="Create and manage your workout programs">
-        <div className="flex flex-col items-center justify-center min-h-screen p-6">
-          <h1 className="text-2xl font-bold mb-4">Welcome to Training Programs</h1>
-          <p className="text-gray-600 dark:text-gray-400 mb-8">
-            No program found. Start building your training blocks!
-          </p>
-          <button
-            onClick={() => setShowProgramForm(true)}
-            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Create New Program
-          </button>
-        </div>
+  // Function to handle program completion warning
+  useEffect(() => {
+    if (program && program.endDate) {
+      const remaining = calculateRemainingTime(program.endDate);
+      
+      if (remaining && remaining.isCompleted && !programToDelete) {
+        // Set a timer to delete the program after 3 days
+        toast.success('Your program has been completed! It will be deleted in 3 days unless extended.', {
+          duration: 10000
+        });
+        
+        // Set the program to be deleted
+        setProgramToDelete(program.id);
+        
+        // Schedule deletion for 3 days later
+        const deletionDate = Date.now() + (3 * 24 * 60 * 60 * 1000);
+        localStorage.setItem(`program_to_delete_${program.id}`, deletionDate.toString());
+      }
+    }
+  }, [program]);
 
-        {/* Program Creation Modal */}
-        {showProgramForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-              <h2 className="text-xl font-semibold mb-4">Create New Program</h2>
-              <form onSubmit={handleCreateProgram}>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Program Name</label>
-                    <input
-                      type="text"
-                      value={programFormData.name}
-                      onChange={(e) =>
-                        setProgramFormData((prev) => ({ ...prev, name: e.target.value }))
-                      }
-                      className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                      placeholder="e.g., 12-Week Strength Program"
-                      required
-                    />
-                  </div>
-                </div>
-                <div className="flex justify-end space-x-3 mt-6">
-                  <button
-                    type="button"
-                    onClick={() => setShowProgramForm(false)}
-                    className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className={`px-4 py-2 bg-blue-600 text-white rounded-lg ${
-                      isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'
-                    }`}
-                  >
-                    {isSubmitting ? 'Creating...' : 'Create Program'}
-                  </button>
-                </div>
-              </form>
+  // Check if it's time to delete the program
+  useEffect(() => {
+    if (!currentUser?.id || !programToDelete) return;
+    
+    const checkDeletion = () => {
+      const deletionDateStr = localStorage.getItem(`program_to_delete_${programToDelete}`);
+      if (deletionDateStr) {
+        const deletionDate = parseInt(deletionDateStr);
+        if (Date.now() >= deletionDate) {
+          // Time to delete the program
+          deleteCurrentProgram()
+            .then(() => {
+              localStorage.removeItem(`program_to_delete_${programToDelete}`);
+              toast.success('Your completed program has been deleted.');
+              setProgramToDelete(null);
+            })
+            .catch(console.error);
+        }
+      }
+    };
+    
+    // Check on mount and every hour
+    checkDeletion();
+    const interval = setInterval(checkDeletion, 60 * 60 * 1000);
+    
+    return () => clearInterval(interval);
+  }, [currentUser?.id, programToDelete]);
+
+  // Function to render the main content based on program state
+  const renderMainContent = () => {
+    if (!program) {
+      if (loading) {
+        return (
+          <GlassCard colSpan="md:col-span-12">
+            <div className="flex justify-center items-center p-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+            </div>
+          </GlassCard>
+        );
+      } else {
+        return (
+          <GlassCard title="Create Your Training Program" colSpan="md:col-span-12">
+            <div className="flex flex-col items-center justify-center text-center p-8 space-y-6">
+              <p className="text-slate-300 max-w-md">
+                You don't have a training program yet. Start by creating one to organize your workout plans.
+              </p>
+              <ModernButton
+                variant="primary"
+                onClick={() => setShowProgramForm(true)}
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                }
+              >
+                Create Program
+              </ModernButton>
+            </div>
+          </GlassCard>
+        );
+      }
+    }
+
+    // Ensure program exists and has required properties
+    const safeProgram = {
+      ...program,
+      name: program?.name || 'Unnamed Program',
+      blocks: program?.blocks || [],
+      startDate: program?.startDate || Date.now(),
+      endDate: program?.endDate
+    };
+
+    // Program exists but has no blocks
+    if (!safeProgram.blocks.length) {
+      return (
+        <GlassCard title={safeProgram.name} colSpan="md:col-span-12">
+          <div className="p-6 text-center">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-4">
+              <div>
+                <h2 className="text-xl font-bold text-white">{safeProgram.name}</h2>
+                {safeProgram.endDate && (
+                  <p className="text-sm text-blue-400 mt-1">
+                    {calculateRemainingTime(safeProgram.endDate)?.formattedString || 'Start date not set'}
+                  </p>
+                )}
+              </div>
+              <div className="mt-2 md:mt-0 flex gap-3">
+                <ModernButton
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowEditProgramModal(true)}
+                  icon={
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                    </svg>
+                  }
+                >
+                  Edit Program
+                </ModernButton>
+                <ModernButton
+                  variant="danger"
+                  size="sm"
+                  onClick={() => setShowDeleteConfirmation(true)}
+                  icon={
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  }
+                >
+                  Delete Program
+                </ModernButton>
+              </div>
+            </div>
+            <p className="text-slate-400">No training blocks yet. Add a block to get started.</p>
+            <div className="mt-4">
+              <ModernButton
+                variant="secondary"
+                onClick={() => {
+                  setShowBlockForm(true);
+                  setEditingBlockId(null);
+                  setBlockFormData({
+                    name: '',
+                    startWeek: 1,
+                    endWeek: 4,
+                    focus: 'Volume',
+                    workoutDays: [],
+                  });
+                }}
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                }
+              >
+                Add Block
+              </ModernButton>
             </div>
           </div>
-        )}
-      </ModernLayout>
-    );
-  }
+        </GlassCard>
+      );
+    }
 
-  return (
-    <ModernLayout title="Training Plans" description="Create and manage your workout programs">
-      <div className="space-y-8">
-        {program ? (
-          <>
-            <GlassCard title={program.name} colSpan="md:col-span-12">
-              <div className="space-y-6">
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between">
-                  <p className="text-slate-300">
-                    {program.blocks.length} training {program.blocks.length === 1 ? 'block' : 'blocks'}
-                  </p>
-                  <div className="flex gap-3 mt-3 md:mt-0">
-                    <ModernButton
-                      variant="secondary"
-                      onClick={() => {
-                        setShowBlockForm(true);
-                        setEditingBlockId(null);
-                        setBlockFormData({
-                          name: '',
-                          startWeek: 1,
-                          endWeek: 4,
-                          focus: 'Volume',
-                          workoutDays: [],
-                        });
-                      }}
-                      icon={
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                      }
-                    >
-                      Add Block
-                    </ModernButton>
-                  </div>
-                </div>
+    // Program and blocks exist
+    return (
+      <GlassCard title={safeProgram.name} colSpan="md:col-span-12">
+        <div className="space-y-6">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-xl font-bold text-white">{safeProgram.name}</h2>
+              {safeProgram.endDate && (
+                <p className="text-sm text-blue-400">
+                  {calculateRemainingTime(safeProgram.endDate)?.formattedString || 'Start date not set'}
+                </p>
+              )}
+            </div>
+            <div className="mt-2 md:mt-0 flex flex-wrap gap-3">
+              <ModernButton
+                variant="outline"
+                size="sm"
+                onClick={() => setShowEditProgramModal(true)}
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                }
+              >
+                Edit Program
+              </ModernButton>
+              <ModernButton
+                variant="secondary"
+                size="sm"
+                onClick={() => {
+                  setShowBlockForm(true);
+                  setEditingBlockId(null);
+                  setBlockFormData({
+                    name: '',
+                    startWeek: 1,
+                    endWeek: 4,
+                    focus: 'Volume',
+                    workoutDays: [],
+                  });
+                }}
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                }
+              >
+                Add Block
+              </ModernButton>
+              <ModernButton
+                variant="danger"
+                size="sm"
+                onClick={() => setShowDeleteConfirmation(true)}
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                  </svg>
+                }
+              >
+                Delete Program
+              </ModernButton>
+            </div>
+          </div>
 
-                {/* Training Blocks */}
-                <div className="space-y-4">
-                  {program.blocks.map((block) => (
-                    <div
-                      key={block.id}
-                      className="bg-slate-800/60 border border-slate-700/60 rounded-xl overflow-hidden"
-                    >
-                      <div
-                        className="p-4 cursor-pointer flex items-center justify-between border-b border-slate-700/60"
-                        onClick={() => {
-                          if (expandedBlockId === block.id) {
-                            setExpandedBlockId(null);
-                          } else {
-                            setExpandedBlockId(block.id);
-                            // Load the first week by default
-                            const firstWeek = block.startWeek || Math.min(...Object.keys(block.weeks || {}).map(Number));
-                            setSelectedWeek(firstWeek);
-                          }
-                        }}
-                      >
-                        <div>
-                          <h3 className="text-lg font-medium text-white">
-                            {block.name}
-                          </h3>
-                          <p className="text-sm text-slate-400">
-                            Weeks {block.startWeek}-{block.endWeek} • {block.focus === 'Custom' ? block.customFocus : block.focus}
-                          </p>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                          <span className="text-sm font-medium px-3 py-1 rounded-full bg-slate-700/60 text-slate-300">
-                            {block.status}
+          {/* Training Blocks */}
+          <div className="space-y-4">
+            {safeProgram.blocks.map((block) => {
+              // Ensure all block properties have safe defaults
+              const safeBlock = {
+                ...block,
+                id: block.id || `block-${Date.now()}`,
+                name: block.name || 'Unnamed Block',
+                startWeek: block.startWeek || 1,
+                endWeek: block.endWeek || 1,
+                focus: block.focus || 'Volume',
+                customFocus: block.customFocus || '',
+                workoutDays: block.workoutDays || [],
+                weeks: block.weeks || {},
+                status: block.status || 'Upcoming'
+              };
+              
+              return (
+                <div
+                  key={safeBlock.id}
+                  className={`bg-slate-800/50 rounded-xl border ${
+                    expandedBlockId === safeBlock.id ? 'border-blue-500' : 'border-slate-700'
+                  } overflow-hidden`}
+                >
+                  <div
+                    className="bg-slate-800 p-4 cursor-pointer"
+                    onClick={() => setExpandedBlockId(expandedBlockId === safeBlock.id ? null : safeBlock.id)}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h3 className="text-lg font-medium text-white">
+                          {safeBlock.name}
+                        </h3>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-900/60 text-blue-200">
+                            Weeks {safeBlock.startWeek}-{safeBlock.endWeek}
                           </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowBlockForm(true);
-                              setEditingBlockId(block.id);
-                              setBlockFormData({
-                                name: block.name,
-                                startWeek: block.startWeek,
-                                endWeek: block.endWeek,
-                                focus: block.focus,
-                                customFocus: block.customFocus,
-                                workoutDays: block.workoutDays,
-                                notes: block.notes,
-                              });
-                            }}
-                            className="p-1 rounded-full text-slate-400 hover:text-white transition-colors"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-                            </svg>
-                          </button>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (window.confirm(`Are you sure you want to delete "${block.name}"?`)) {
-                                handleDeleteBlock(block.id);
-                              }
-                            }}
-                            className="p-1 rounded-full text-slate-400 hover:text-red-500 transition-colors"
-                          >
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-900/60 text-purple-200">
+                            {safeBlock.focus === 'Custom' ? safeBlock.customFocus : safeBlock.focus}
+                          </span>
+                          {safeBlock.workoutDays.length > 0 && (
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-900/60 text-green-200">
+                              {safeBlock.workoutDays.length} workout days
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center space-x-3">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setEditingBlockId(safeBlock.id);
+                            setBlockFormData({
+                              name: safeBlock.name,
+                              startWeek: safeBlock.startWeek,
+                              endWeek: safeBlock.endWeek,
+                              focus: safeBlock.focus as any,
+                              customFocus: safeBlock.customFocus,
+                              workoutDays: [...safeBlock.workoutDays],
+                              notes: safeBlock.notes,
+                            });
+                            setShowBlockForm(true);
+                          }}
+                          className="text-slate-400 hover:text-white transition-colors"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteBlock(safeBlock.id);
+                          }}
+                          className="text-slate-400 hover:text-red-500 transition-colors"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                          </svg>
+                        </button>
+                        <svg
+                          className={`w-5 h-5 text-slate-400 transform transition-transform ${
+                            expandedBlockId === safeBlock.id ? 'rotate-180' : ''
+                          }`}
+                          fill="none"
+                          stroke="currentColor"
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+
+                  {expandedBlockId === safeBlock.id && (
+                    <div className="p-4 border-t border-slate-700">
+                      {/* Week selector */}
+                      <div className="mb-4">
+                        <label className="block text-sm font-medium text-slate-300 mb-2">
+                          Select Week:
+                        </label>
+                        <div className="flex flex-wrap gap-2">
+                          {Array.from({ length: safeBlock.endWeek - safeBlock.startWeek + 1 }).map((_, i) => {
+                            const weekNum = safeBlock.startWeek + i;
+                            return (
+                              <button
+                                key={weekNum}
+                                onClick={() => setSelectedWeek(weekNum)}
+                                className={`px-3 py-1 rounded-md text-sm ${
+                                  selectedWeek === weekNum
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                                }`}
+                              >
+                                Week {weekNum}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
 
-                      {expandedBlockId === block.id && selectedWeek !== null && (
-                        <div className="p-4">
-                          {/* Week selector tabs */}
-                          <div className="flex overflow-x-auto space-x-2 pb-4">
-                            {Array.from(
-                              { length: block.endWeek - block.startWeek + 1 },
-                              (_, i) => block.startWeek + i
-                            ).map((week) => (
-                              <button
-                                key={week}
-                                onClick={() => setSelectedWeek(week)}
-                                className={`px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap ${
-                                  selectedWeek === week
-                                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white'
-                                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-                                }`}
-                              >
-                                Week {week}
-                              </button>
-                            ))}
-                          </div>
-
-                          {/* Workout schedule for the selected week */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
-                            {block.workoutDays.map((day) => {
-                              const workouts = block.weeks && block.weeks[selectedWeek]?.days[day] || [];
+                      {/* Display selected week's workouts */}
+                      {selectedWeek !== null && (
+                        <div className="mt-4">
+                          <h4 className="font-medium text-slate-200 mb-4">
+                            Week {selectedWeek} Workouts
+                          </h4>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {(safeBlock.workoutDays || []).map((day) => {
+                              const workouts = safeBlock.weeks && 
+                                safeBlock.weeks[selectedWeek] && 
+                                safeBlock.weeks[selectedWeek].days && 
+                                safeBlock.weeks[selectedWeek].days[day] 
+                                  ? safeBlock.weeks[selectedWeek].days[day] 
+                                  : [];
                               return (
                                 <div key={day} className="bg-slate-900/60 rounded-lg p-4">
                                   <div className="flex justify-between items-center mb-3">
@@ -615,7 +804,7 @@ export default function PlanPage() {
                                       size="sm"
                                       onClick={() => {
                                         setSelectedDay(day);
-                                        setSelectedBlockId(block.id);
+                                        setSelectedBlockId(safeBlock.id);
                                         setShowWorkoutForm(true);
                                         setWorkoutFormData({
                                           exercise: SUPPORTED_EXERCISES[0],
@@ -650,7 +839,7 @@ export default function PlanPage() {
                                                   )
                                                 ) {
                                                   handleDeleteWorkout(
-                                                    block.id,
+                                                    safeBlock.id,
                                                     selectedWeek,
                                                     day,
                                                     index
@@ -682,76 +871,84 @@ export default function PlanPage() {
                         </div>
                       )}
                     </div>
-                  ))}
+                  )}
                 </div>
-              </div>
-            </GlassCard>
-          </>
-        ) : loading ? (
-          <GlassCard colSpan="md:col-span-12">
-            <div className="flex justify-center items-center p-8">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-            </div>
-          </GlassCard>
-        ) : (
-          <GlassCard title="Create Your Training Program" colSpan="md:col-span-12">
-            <div className="flex flex-col items-center justify-center text-center p-8 space-y-6">
-              <p className="text-slate-300 max-w-md">
-                You don't have a training program yet. Start by creating one to organize your workout plans.
-              </p>
-              <ModernButton
-                variant="primary"
-                onClick={() => setShowProgramForm(true)}
-                icon={
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
-                }
-              >
-                Create Program
-              </ModernButton>
-            </div>
-          </GlassCard>
-        )}
+              );
+            })}
+          </div>
+        </div>
+      </GlassCard>
+    );
+  };
 
-        {/* Program Creation Modal */}
-        {showProgramForm && (
+  if (!currentUser) {
+    return (
+      <ModernLayout title="Training Plans" description="Create and manage your workout programs">
+        <div className="flex flex-col items-center justify-center min-h-screen p-6">
+          <h1 className="text-2xl font-bold mb-4">Welcome to Training Programs</h1>
+          <p className="text-gray-600 dark:text-gray-400 mb-8">
+            Please log in to create and manage your training programs.
+          </p>
+          <button
+            onClick={() => router.push('/login')}
+            className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            Log In
+          </button>
+        </div>
+      </ModernLayout>
+    );
+  }
+
+  return (
+    <ModernLayout title="Training Plans" description="Create and manage your workout programs">
+      <div className="space-y-8">
+        {renderMainContent()}
+
+        {/* Delete Confirmation Dialog */}
+        {showDeleteConfirmation && (
           <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-md p-6 shadow-xl">
-              <h2 className="text-xl font-bold text-white mb-4">Create Program</h2>
-              <form onSubmit={handleCreateProgram}>
-                <div className="mb-4">
-                  <label htmlFor="programName" className="block text-sm font-medium text-slate-300 mb-1">
-                    Program Name
-                  </label>
-                  <input
-                    type="text"
-                    id="programName"
-                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    value={programFormData.name}
-                    onChange={(e) => setProgramFormData({ ...programFormData, name: e.target.value })}
-                    required
-                  />
-                </div>
-                <div className="flex justify-end space-x-3 mt-6">
-                  <ModernButton
-                    type="button"
-                    variant="outline"
-                    onClick={() => setShowProgramForm(false)}
-                  >
-                    Cancel
-                  </ModernButton>
-                  <ModernButton
-                    type="submit"
-                    variant="primary"
-                    isLoading={isSubmitting}
-                  >
-                    Create
-                  </ModernButton>
-                </div>
-              </form>
+              <h2 className="text-xl font-bold text-white mb-4">Delete Program</h2>
+              <p className="text-slate-300 mb-6">
+                Are you sure you want to delete this program? This action cannot be undone and all your
+                training blocks and workouts will be lost.
+              </p>
+              <div className="flex justify-end space-x-3">
+                <ModernButton
+                  variant="outline"
+                  onClick={() => setShowDeleteConfirmation(false)}
+                >
+                  Cancel
+                </ModernButton>
+                <ModernButton
+                  variant="danger"
+                  onClick={handleDeleteProgram}
+                  isLoading={isSubmitting}
+                >
+                  Delete Program
+                </ModernButton>
+              </div>
             </div>
           </div>
+        )}
+
+        {/* Replace the old program creation modal with the new CreateProgramModal */}
+        {showProgramForm && currentUser?.id && (
+          <CreateProgramModal
+            onCreateProgram={handleCreateProgram}
+            onClose={() => setShowProgramForm(false)}
+            userId={currentUser.id}
+          />
+        )}
+
+        {/* Edit Program Modal */}
+        {showEditProgramModal && program && (
+          <EditProgramModal
+            program={program}
+            onUpdate={handleProgramUpdate}
+            onClose={() => setShowEditProgramModal(false)}
+          />
         )}
 
         {/* Block Form Modal */}

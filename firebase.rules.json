@@ -1,0 +1,15 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        // Allow read/write access to own data
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid",
+        
+        "messages": {
+          ".indexOn": ["createdAt"]
+        }
+      }
+    }
+  }
+} 

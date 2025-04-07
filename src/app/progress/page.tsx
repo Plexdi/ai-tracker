@@ -98,17 +98,39 @@ export default function ProgressPage() {
             </p>
           </div>
           {selectedExercise === 'All' ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {SUPPORTED_EXERCISES.map(exercise => (
-                <div key={exercise} className="bg-slate-800/50 rounded-xl p-4">
+            <div className="space-y-6">
+              {/* Top row: Squat and Bench Press side by side */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Squat chart */}
+                <div className="bg-slate-800/50 rounded-xl p-4">
                   <h3 className="text-sm font-medium text-slate-300 mb-4">
-                    {exercise} Progress (Estimated 1RM)
+                    Squat Progress (Estimated 1RM)
                   </h3>
                   <div className="h-[300px]">
-                    <ProgressChart exercise={exercise} />
+                    <ProgressChart exercise="Squat" />
                   </div>
                 </div>
-              ))}
+                
+                {/* Bench Press chart */}
+                <div className="bg-slate-800/50 rounded-xl p-4">
+                  <h3 className="text-sm font-medium text-slate-300 mb-4">
+                    Bench Press Progress (Estimated 1RM)
+                  </h3>
+                  <div className="h-[300px]">
+                    <ProgressChart exercise="Bench Press" />
+                  </div>
+                </div>
+              </div>
+              
+              {/* Bottom row: Deadlift full width */}
+              <div className="bg-slate-800/50 rounded-xl p-4">
+                <h3 className="text-sm font-medium text-slate-300 mb-4">
+                  Deadlift Progress (Estimated 1RM)
+                </h3>
+                <div className="h-[300px]">
+                  <ProgressChart exercise="Deadlift" />
+                </div>
+              </div>
             </div>
           ) : (
             <div className="h-[400px]">

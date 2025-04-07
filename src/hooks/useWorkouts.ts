@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Workout } from '@/lib/types';
-import { subscribeToWorkouts, getPersonalRecords, SUPPORTED_EXERCISES, SupportedExercise } from '@/lib/workout-service';
+import { subscribeToWorkouts, getPersonalRecords, SUPPORTED_EXERCISES, SupportedExercise, getExerciseHistory } from '@/lib/workout-service';
 import { useStore } from '@/lib/zustandStore';
 
 interface UseWorkoutsOptions {
@@ -131,4 +131,35 @@ export function useWorkoutVolume(days: number = 7) {
   }, [workouts, days]);
 
   return { volume, loading, error };
+}
+
+export function useExerciseHistory(exerciseName: string) {
+  const currentUser = useStore((state) => state.currentUser);
+  const [history, setHistory] = useState<Workout[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!currentUser?.id || !exerciseName) {
+      setHistory([]);
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    getExerciseHistory(currentUser.id, exerciseName)
+      .then((workouts) => {
+        setHistory(workouts);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error('Error fetching exercise history:', err);
+        setError('Failed to load exercise history');
+        setLoading(false);
+      });
+  }, [currentUser?.id, exerciseName]);
+
+  return { history, loading, error };
 } 

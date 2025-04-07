@@ -1,0 +1,35 @@
+{
+  "rules": {
+    ".read": "auth != null",
+    ".write": "auth != null",
+    "users": {
+      "$userId": {
+        ".read": "$userId === auth.uid",
+        ".write": "$userId === auth.uid",
+        "messages": {
+          ".indexOn": ["createdAt"]
+        },
+        "programs": {
+          ".indexOn": ["createdAt"]
+        },
+        "chatGPTImports": {
+          ".indexOn": ["timestamp"]
+        }
+      }
+    },
+    "workouts": {
+      "$userId": {
+        ".read": "$userId === auth.uid",
+        ".write": "$userId === auth.uid",
+        ".indexOn": ["date", "createdAt"]
+      }
+    },
+    "customExercises": {
+      "$userId": {
+        ".read": "$userId === auth.uid",
+        ".write": "$userId === auth.uid",
+        ".indexOn": ["createdAt"]
+      }
+    }
+  }
+} 

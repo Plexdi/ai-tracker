@@ -19,7 +19,7 @@ export async function POST(request: Request) {
 Goals: ${goals}
 Experience Level: ${experience}
 Preferences: ${preferences}
-
+@@@
 Please provide a structured program that includes:
 1. Weekly schedule
 2. Exercise selection

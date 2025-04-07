@@ -89,4 +89,34 @@ export interface Program {
   createdAt: number;
   updatedAt: number;
   currentBlockId?: string;
+  startDate?: number; // timestamp in milliseconds
+  endDate?: number; // timestamp in milliseconds
+  daysPerWeek?: number;
+}
+
+// Split Types
+export type SplitTemplateType = 'PPL' | 'Arnold' | 'UpperLower' | 'FullBody' | 'Custom' | 'Combined';
+
+export interface SplitDay {
+  name: string;
+  focus: string[];
+  notes?: string;
+  programId?: string;
+  blockId?: string;
+}
+
+export interface Split {
+  id: string;
+  userId: string;
+  name: string;
+  daysPerWeek: number;
+  template: SplitTemplateType;
+  days: SplitDay[];
+  createdAt: number;
+  updatedAt: number;
+  isFavorite?: boolean;
+  combinedTemplates?: {
+    templates: SplitTemplateType[];
+    daysPerTemplate: number[];
+  };
 } 

@@ -17,8 +17,22 @@ export default function DashboardHorizontalProfile() {
       <div className="flex flex-col md:flex-row md:items-center">
         {/* Avatar and name */}
         <div className="flex items-center mb-4 md:mb-0">
-          <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white text-2xl font-bold">
-            {currentUser?.displayName?.charAt(0) || 'U'}
+          <div className="h-16 w-16 md:h-20 md:w-20 rounded-full bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center text-white text-2xl font-bold overflow-hidden">
+            {currentUser?.photoURL ? (
+              <img 
+                src={currentUser.photoURL} 
+                alt={currentUser?.displayName || "User"} 
+                className="h-full w-full object-cover"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.onerror = null;
+                  target.style.display = 'none';
+                  // Parent element will show the fallback letter
+                }}
+              />
+            ) : (
+              currentUser?.displayName?.charAt(0) || 'U'
+            )}
           </div>
           <div className="ml-4">
             <h2 className="text-xl md:text-2xl font-bold text-white">
@@ -30,23 +44,8 @@ export default function DashboardHorizontalProfile() {
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="flex flex-wrap items-center gap-6 md:ml-auto">
-          <div className="text-center">
-            <p className="text-3xl font-bold text-white">0</p>
-            <p className="text-xs text-slate-400">Total Workouts</p>
-          </div>
-          
-          <div className="text-center">
-            <p className="text-3xl font-bold text-white">0</p>
-            <p className="text-xs text-slate-400">Lift PRs</p>
-          </div>
-          
-          <div className="text-center">
-            <p className="text-3xl font-bold text-white">0</p>
-            <p className="text-xs text-slate-400">Day Streak</p>
-          </div>
-          
+        {/* Profile button */}
+        <div className="md:ml-auto">
           <Link href="/profile">
             <ModernButton 
               variant="secondary"

@@ -8,11 +8,13 @@ import ModernButton from '@/components/ModernButton';
 import { useStore } from '@/lib/zustandStore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { createWorkout } from '@/lib/workout-service';
+import { createWorkout, saveCustomExercise, getCustomExercises, SUPPORTED_EXERCISES, MUSCLE_GROUPS, type MuscleGroup, type CustomExercise, updateWorkingWeight } from '@/lib/workout-service';
 import toast from 'react-hot-toast';
 
 interface FormData {
   exercise: string;
+  customExercise: string;
+  muscleGroup: MuscleGroup;
   weight: number;
   unit: 'kg' | 'lbs';
   reps: number;
@@ -23,6 +25,8 @@ interface FormData {
 
 const initialFormState: FormData = {
   exercise: '',
+  customExercise: '',
+  muscleGroup: 'Other',
   weight: 0,
   unit: 'kg',
   reps: 0,
@@ -31,7 +35,8 @@ const initialFormState: FormData = {
   notes: '',
 };
 
-const exercises = ['Squat', 'Bench Press', 'Deadlift', 'Overhead Press', 'Other'];
+// Limited default exercises to only SBD + Other
+const defaultExercises = ['Squat', 'Bench Press', 'Deadlift', 'Other'];
 
 export default function LogLiftPage() {
   const router = useRouter();
@@ -39,6 +44,11 @@ export default function LogLiftPage() {
   const [formData, setFormData] = useState<FormData>(initialFormState);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [customExercises, setCustomExercises] = useState<CustomExercise[]>([]);
+  const [isLoadingExercises, setIsLoadingExercises] = useState(false);
+  
+  // Only use the default exercises array - don't combine with custom exercises for dropdown
+  const exerciseOptions = defaultExercises;
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -57,9 +67,54 @@ export default function LogLiftPage() {
     return () => unsubscribe();
   }, [router, setCurrentUser]);
 
+  useEffect(() => {
+    const loadCustomExercises = async () => {
+      if (!currentUser?.id) return;
+      
+      setIsLoadingExercises(true);
+      try {
+        const exercises = await getCustomExercises(currentUser.id);
+        setCustomExercises(exercises);
+      } catch (error) {
+        console.error('Error loading custom exercises:', error);
+      } finally {
+        setIsLoadingExercises(false);
+      }
+    };
+
+    loadCustomExercises();
+  }, [currentUser?.id]);
+
+  // Get the selected exercise from custom exercises
+  const getSelectedExercise = (exerciseName: string): CustomExercise | undefined => {
+    return customExercises.find(ex => ex.name === exerciseName);
+  };
+
+  // When exercise selection changes, apply working weight if available
+  useEffect(() => {
+    if (!formData.exercise || formData.exercise === 'Other') return;
+    
+    const selectedExercise = getSelectedExercise(formData.exercise);
+    if (selectedExercise?.workingWeight && selectedExercise?.workingWeightUnit) {
+      setFormData(prev => ({
+        ...prev,
+        weight: selectedExercise.workingWeight || 0,
+        unit: selectedExercise.workingWeightUnit || 'kg'
+      }));
+    }
+  }, [formData.exercise, customExercises]);
+
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
-    if (!formData.exercise) newErrors.exercise = 'Please select an exercise';
+    
+    if (formData.exercise === 'Other') {
+      if (!formData.customExercise.trim()) {
+        newErrors.customExercise = 'Please enter a custom exercise name';
+      }
+    } else if (!formData.exercise) {
+      newErrors.exercise = 'Please select an exercise';
+    }
+    
     if (!formData.weight || formData.weight <= 0) newErrors.weight = 'Please enter a valid weight';
     if (!formData.reps || formData.reps <= 0) newErrors.reps = 'Please enter valid reps';
     if (!formData.sets || formData.sets <= 0) newErrors.sets = 'Please enter valid sets';
@@ -82,15 +137,96 @@ export default function LogLiftPage() {
         throw new Error('You must be logged in to log a workout');
       }
 
+      // If it's a custom exercise, save it first
+      let exerciseName = formData.exercise;
+      if (formData.exercise === 'Other' && formData.customExercise.trim()) {
+        exerciseName = formData.customExercise.trim();
+        await saveCustomExercise(
+          currentUser.id,
+          exerciseName,
+          formData.muscleGroup,
+          formData.weight > 0 ? formData.weight : undefined,
+          formData.weight > 0 ? formData.unit : undefined
+        );
+        // Refresh custom exercises
+        const exercises = await getCustomExercises(currentUser.id);
+        setCustomExercises(exercises);
+      } else if (formData.exercise !== 'Other' && !SUPPORTED_EXERCISES.includes(formData.exercise as any)) {
+        // For existing custom exercises, update working weight if it's different
+        const selectedExercise = getSelectedExercise(formData.exercise);
+        if (
+          selectedExercise?.id && 
+          (selectedExercise.workingWeight !== formData.weight || 
+           selectedExercise.workingWeightUnit !== formData.unit)
+        ) {
+          await updateWorkingWeight(
+            currentUser.id,
+            selectedExercise.id,
+            formData.weight,
+            formData.unit
+          );
+          // Show success message for weight update
+          toast.success(`Updated working weight for ${formData.exercise}!`);
+        }
+      }
+
       await createWorkout(
         {
           ...formData,
+          exercise: exerciseName,
           date: new Date().toISOString().split('T')[0],
         },
         currentUser.id
       );
 
       toast.success('Workout logged successfully!');
+      
+      // Show progressive overload suggestion toast
+      if (formData.exercise !== 'Other' && !SUPPORTED_EXERCISES.includes(formData.exercise as any)) {
+        const nextWeight = formData.unit === 'kg' 
+          ? Math.round((formData.weight + 2.5) * 4) / 4 // Round to nearest 0.25 kg
+          : Math.round((formData.weight + 5) * 2) / 2;  // Round to nearest 0.5 lbs
+          
+        setTimeout(() => {
+          toast((t) => (
+            <div className="flex items-center">
+              <span>Great job! Want to try {nextWeight} {formData.unit} next session?</span>
+              <div className="ml-3 flex space-x-2">
+                <button 
+                  onClick={() => {
+                    if (currentUser?.id && formData.exercise !== 'Other') {
+                      const selectedExercise = getSelectedExercise(formData.exercise);
+                      if (selectedExercise?.id) {
+                        updateWorkingWeight(
+                          currentUser.id,
+                          selectedExercise.id,
+                          nextWeight,
+                          formData.unit
+                        ).then(() => {
+                          toast.success(`Updated target weight to ${nextWeight} ${formData.unit}!`);
+                          // Refresh custom exercises
+                          getCustomExercises(currentUser.id).then(setCustomExercises);
+                        });
+                      }
+                    }
+                    toast.dismiss(t.id);
+                  }} 
+                  className="px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                >
+                  Yes
+                </button>
+                <button 
+                  onClick={() => toast.dismiss(t.id)} 
+                  className="px-2 py-1 bg-slate-600 text-white text-xs rounded hover:bg-slate-700"
+                >
+                  No
+                </button>
+              </div>
+            </div>
+          ), { duration: 8000 });
+        }, 1000);
+      }
+      
       setFormData(initialFormState);
       setErrors({});
     } catch (error) {
@@ -133,12 +269,54 @@ export default function LogLiftPage() {
                   bg-slate-800/80 text-white p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
               >
                 <option value="">Select Exercise</option>
-                {exercises.map(ex => (
-                  <option key={ex} value={ex}>{ex}</option>
-                ))}
+                {isLoadingExercises ? (
+                  <option value="" disabled>Loading exercises...</option>
+                ) : (
+                  exerciseOptions.map(ex => (
+                    <option key={ex} value={ex}>{ex}</option>
+                  ))
+                )}
               </select>
               {errors.exercise && <p className="mt-1 text-sm text-red-500">{errors.exercise}</p>}
             </div>
+
+            {/* Custom Exercise Input (appears only when "Other" is selected) */}
+            {formData.exercise === 'Other' && (
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Custom Exercise Name
+                  </label>
+                  <input
+                    type="text"
+                    name="customExercise"
+                    value={formData.customExercise}
+                    onChange={handleInputChange}
+                    placeholder="Enter exercise name"
+                    className={`w-full rounded-lg border ${errors.customExercise ? 'border-red-500' : 'border-slate-700'} 
+                      bg-slate-800/80 text-white p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                  />
+                  {errors.customExercise && <p className="mt-1 text-sm text-red-500">{errors.customExercise}</p>}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-2">
+                    Muscle Group
+                  </label>
+                  <select
+                    name="muscleGroup"
+                    value={formData.muscleGroup}
+                    onChange={handleInputChange}
+                    className="w-full rounded-lg border border-slate-700 
+                      bg-slate-800/80 text-white p-2.5 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    {MUSCLE_GROUPS.map(group => (
+                      <option key={group} value={group}>{group}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
 
             {/* Weight Input with Unit Toggle */}
             <div>
@@ -280,10 +458,13 @@ export default function LogLiftPage() {
         {/* Information Card */}
         <GlassCard title="Tips for Accurate Tracking" colSpan="md:col-span-12">
           <ul className="list-disc pl-5 text-slate-300 space-y-2">
+            <li>Focus on tracking the main lifts: Squat, Bench Press, and Deadlift</li>
+            <li>Use the "Other" option to log accessory or assistance exercises</li>
             <li>RPE (Rate of Perceived Exertion) is a scale from 1-10 indicating how difficult the set was</li>
             <li>For compound movements, count only working sets (not warm-up sets)</li>
             <li>Be consistent with your unit of measurement (kg or lbs) for better progress tracking</li>
             <li>Use the notes field to record details like rest times, variations, or how you felt</li>
+            <li>Custom exercises logged with "Other" will be saved in your exercise library for future reference</li>
           </ul>
         </GlassCard>
       </div>

@@ -7,7 +7,10 @@ const db = getDatabase(app);
 
 export async function createProgram(
   userId: string,
-  name: string
+  name: string,
+  startDate?: number,
+  daysPerWeek?: number,
+  initialBlock?: Omit<TrainingBlock, 'id' | 'createdAt' | 'updatedAt'>
 ): Promise<string> {
   if (!userId) {
     throw new Error('User must be authenticated to create a program');
@@ -15,14 +18,37 @@ export async function createProgram(
 
   try {
     const programRef = push(ref(db, `users/${userId}/programs`));
+    const now = Date.now();
     const newProgram: Program = {
       id: programRef.key!,
       userId,
       name,
       blocks: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now()
+      createdAt: now,
+      updatedAt: now,
+      startDate: startDate || now,
+      daysPerWeek: daysPerWeek || 3
     };
+    
+    // If an initial block is provided, add it to the program
+    if (initialBlock) {
+      const newBlock: TrainingBlock = {
+        ...initialBlock,
+        id: crypto.randomUUID(),
+        status: 'Upcoming',
+        createdAt: now,
+        updatedAt: now
+      };
+      
+      newProgram.blocks = [newBlock];
+      
+      // Calculate and set program end date based on the block's end week
+      if (initialBlock.endWeek && newProgram.startDate) {
+        const dayInMs = 1000 * 60 * 60 * 24;
+        const weeksInMs = initialBlock.endWeek * 7 * dayInMs;
+        newProgram.endDate = newProgram.startDate + weeksInMs;
+      }
+    }
     
     await set(programRef, newProgram);
     return programRef.key!;
@@ -323,5 +349,96 @@ export async function updateWeekWorkouts(
   } catch (error) {
     console.error('Error updating week workouts:', error);
     throw new Error('Failed to update week workouts');
+  }
+}
+
+export async function updateProgram(
+  userId: string,
+  programId: string,
+  updates: Partial<Program>
+): Promise<void> {
+  if (!userId || !programId) {
+    throw new Error('User and program IDs are required');
+  }
+
+  try {
+    const programRef = ref(db, `users/${userId}/programs/${programId}`);
+    const snapshot = await get(programRef);
+    
+    if (!snapshot.exists()) {
+      throw new Error('Program not found');
+    }
+
+    const program = snapshot.val() as Program;
+    
+    const updatedProgram = {
+      ...program,
+      ...updates,
+      updatedAt: Date.now(),
+    };
+
+    // Don't allow overwriting of certain fields
+    updatedProgram.id = program.id;
+    updatedProgram.userId = program.userId;
+    updatedProgram.createdAt = program.createdAt;
+
+    await set(programRef, updatedProgram);
+  } catch (error) {
+    console.error('Error updating program:', error);
+    throw new Error('Failed to update program');
+  }
+}
+
+export async function deleteProgram(
+  userId: string,
+  programId: string
+): Promise<void> {
+  if (!userId || !programId) {
+    throw new Error('User and program IDs are required');
+  }
+
+  try {
+    const programRef = ref(db, `users/${userId}/programs/${programId}`);
+    const snapshot = await get(programRef);
+    
+    if (!snapshot.exists()) {
+      throw new Error('Program not found');
+    }
+
+    // Delete the program by setting to null
+    await set(programRef, null);
+  } catch (error) {
+    console.error('Error deleting program:', error);
+    throw new Error('Failed to delete program');
+  }
+}
+
+export async function checkAndDeleteCompletedPrograms(userId: string): Promise<void> {
+  if (!userId) {
+    throw new Error('User ID is required');
+  }
+
+  try {
+    const programsRef = ref(db, `users/${userId}/programs`);
+    const snapshot = await get(programsRef);
+    
+    if (!snapshot.exists()) {
+      return; // No programs to check
+    }
+
+    const programs = snapshot.val();
+    const now = Date.now();
+    
+    for (const programId in programs) {
+      const program = programs[programId] as Program;
+      
+      // If program has an end date and it's in the past
+      if (program.endDate && program.endDate < now) {
+        await deleteProgram(userId, programId);
+      }
+    }
+  } catch (error) {
+    console.error('Error checking completed programs:', error);
+    throw new Error('Failed to check completed programs');
   }
 } 

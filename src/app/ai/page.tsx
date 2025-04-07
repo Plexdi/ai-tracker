@@ -8,8 +8,10 @@ import ModernButton from '@/components/ModernButton';
 import { useStore } from '@/lib/zustandStore';
 import { saveMessage, getTodayMessages, saveChatGPTImport } from '@/lib/chat-service';
 import { getAIResponse } from '@/lib/ai-service';
-import { Message } from '@/lib/types';
+import { Message, Workout } from '@/lib/types';
 import { toast } from 'react-hot-toast';
+import EnvChecker from '@/components/EnvChecker';
+import { getUserProgramId } from '@/lib/program-service';
 
 const suggestedQuestions = [
   { id: 1, text: "Generate my next week's program", icon: '📅' },
@@ -17,6 +19,31 @@ const suggestedQuestions = [
   { id: 3, text: 'How to improve my squat form?', icon: '🏋️‍♂️' },
   { id: 4, text: 'Recommend a pre-workout meal', icon: '🍎' },
 ];
+
+// Add an interface for the workout context that includes trainingProgram
+interface ExtendedWorkoutContext {
+  recentWorkouts: Workout[];
+  currentPRs: Record<string, number>;
+  weeklyVolume: number;
+  trainingProgram?: {
+    userId: string;
+    programId: string;
+    [key: string]: any;
+  };
+}
+
+// Error boundary component
+function ErrorFallback({ error, resetErrorBoundary }: { error: Error; resetErrorBoundary: () => void }) {
+  return (
+    <div className="p-4 rounded-lg bg-red-900/20 border border-red-800">
+      <h3 className="text-lg font-semibold text-white mb-2">Something went wrong</h3>
+      <p className="text-red-200 mb-4">{error.message || 'An unexpected error occurred'}</p>
+      <ModernButton variant="outline" onClick={resetErrorBoundary}>
+        Try again
+      </ModernButton>
+    </div>
+  );
+}
 
 export default function AIAssistantPage() {
   const router = useRouter();
@@ -30,6 +57,9 @@ export default function AIAssistantPage() {
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const currentDate = new Date().toISOString().split('T')[0];
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Redirect if not authenticated
   useEffect(() => {
@@ -46,12 +76,45 @@ export default function AIAssistantPage() {
     scrollToBottom();
   }, [messages]);
 
+  // Check AI service connectivity on mount
+  useEffect(() => {
+    const checkConnection = async () => {
+      if (!currentUser?.id) return;
+      
+      try {
+        setConnectionStatus('connecting');
+        
+        // Simple ping to check if the service is available
+        const pingResponse = await getAIResponse('ping', { 
+          recentWorkouts: [], 
+          currentPRs: {}, 
+          weeklyVolume: 0 
+        });
+        
+        if (pingResponse.error) {
+          setConnectionStatus('error');
+          setConnectionError(pingResponse.error);
+        } else {
+          setConnectionStatus('connected');
+          setConnectionError(null);
+        }
+      } catch (error) {
+        console.error('AI service connectivity check failed:', error);
+        setConnectionStatus('error');
+        setConnectionError(error instanceof Error ? error.message : 'Unknown connection error');
+      }
+    };
+    
+    checkConnection();
+  }, [currentUser?.id, retryCount]);
+
   // Load today's chat history when component mounts
   useEffect(() => {
     const loadChatHistory = async () => {
       if (!currentUser?.id) return;
 
       try {
+        setIsLoadingHistory(true);
         const todaysMessages = await getTodayMessages(currentUser.id, currentDate);
 
         if (todaysMessages.length === 0) {
@@ -60,6 +123,7 @@ export default function AIAssistantPage() {
           const welcomeMessage: Message = {
             id: now.toString(),
             type: 'assistant',
+            role: 'assistant',
             content: "Hello! I'm your AI fitness coach powered by Deepseek. How can I help you today?",
             timestamp: new Date(now).toISOString(),
             sessionDate: currentDate,
@@ -72,7 +136,29 @@ export default function AIAssistantPage() {
         }
       } catch (error) {
         console.error('Error loading chat history:', error);
-        toast.error('Failed to load chat history');
+        
+        // Add a more descriptive error to help users understand the issue
+        let errorMessage = 'Failed to load chat history';
+        if (error instanceof Error) {
+          if (error.message.includes('Index not defined')) {
+            errorMessage = 'Database index issue. Please contact support with the message: "Update Firebase rules with .indexOn for messages."';
+          }
+        }
+        
+        toast.error(errorMessage);
+        
+        // Add a fallback welcome message even when there's an error
+        const now = Date.now();
+        const fallbackMessage: Message = {
+          id: now.toString(),
+          type: 'assistant',
+          role: 'assistant',
+          content: "Hello! I seem to be having trouble loading your chat history. Please try refreshing the page or contact support if the issue persists.",
+          timestamp: new Date(now).toISOString(),
+          sessionDate: currentDate,
+          createdAt: now
+        };
+        setMessages([fallbackMessage]);
       } finally {
         setIsLoadingHistory(false);
       }
@@ -85,69 +171,83 @@ export default function AIAssistantPage() {
     e.preventDefault();
     if (!input.trim() || isLoading || !currentUser?.id) return;
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      type: 'user',
-      content: input.trim(),
-      timestamp: new Date().toISOString(),
-      sessionDate: currentDate,
-      createdAt: Date.now()
-    };
-
-    setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
+    const userId = currentUser.id;
 
     try {
-      await saveMessage(userMessage, currentUser.id);
-      
-      // Get the latest message to access workout context
-      const messages = await getTodayMessages(currentUser.id, currentDate);
-      const lastAssistantMessage = messages
-        .filter(m => m.type === 'assistant')
-        .pop();
-      
-      // Ensure workoutContext has all required fields
-      const workoutContext = lastAssistantMessage?.workoutContext && {
-        recentWorkouts: lastAssistantMessage.workoutContext.recentWorkouts ?? [],
-        currentPRs: lastAssistantMessage.workoutContext.currentPRs ?? {},
-        weeklyVolume: lastAssistantMessage.workoutContext.weeklyVolume ?? 0
+      // Create a user message object
+      const userMessage: Message = {
+        id: Date.now().toString(),
+        type: 'user',
+        content: input,
+        timestamp: new Date().toISOString(),
+        sessionDate: currentDate,
+        createdAt: Date.now()
       };
       
-      const aiResponse = await getAIResponse(
-        input,
-        workoutContext
-      );
+      // Save user message
+      await saveMessage(userMessage, userId);
       
-      if (aiResponse.error) {
-        throw new Error(aiResponse.error);
+      // Add user message to the chat
+      setMessages(prev => [...prev, userMessage]);
+      
+      // Get messages to provide context to AI
+      let previousMessages: Message[] = [];
+      try {
+        previousMessages = await getTodayMessages(userId, currentDate);
+      } catch (error) {
+        console.error('Error fetching today messages:', error);
+      }
+      
+      // Get the last assistant message and its workout context
+      const lastAssistantMessage = [...previousMessages]
+        .reverse()
+        .find(msg => msg.type === 'assistant');
+      
+      // Create or update workout context
+      const workoutContext: ExtendedWorkoutContext = {
+        recentWorkouts: lastAssistantMessage?.workoutContext?.recentWorkouts || [],
+        currentPRs: lastAssistantMessage?.workoutContext?.currentPRs || {},
+        weeklyVolume: lastAssistantMessage?.workoutContext?.weeklyVolume || 0,
+      };
+      
+      // Fetch the user's current program ID if a user is logged in
+      try {
+        const programId = await getUserProgramId(userId);
+        if (programId) {
+          workoutContext.trainingProgram = {
+            userId,
+            programId,
+            // Additional program details can be added here
+          };
+        }
+      } catch (error) {
+        console.error('Error fetching user program ID:', error);
       }
 
+      // Get AI response
+      const aiResponse = await getAIResponse(input, workoutContext);
+      
+      // Create an assistant message object
       const assistantMessage: Message = {
         id: Date.now().toString(),
         type: 'assistant',
         content: aiResponse.content,
         timestamp: new Date().toISOString(),
         sessionDate: currentDate,
+        workoutContext,
         createdAt: Date.now()
       };
-
-      await saveMessage(assistantMessage, currentUser.id);
-      setMessages(prev => [...prev, assistantMessage]);
-    } catch (error) {
-      console.error('Error in chat interaction:', error);
-      toast.error('Failed to get AI response');
       
-      const errorMessage: Message = {
-        id: Date.now().toString(),
-        type: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
-        timestamp: new Date().toISOString(),
-        sessionDate: currentDate,
-        createdAt: Date.now()
-      };
-      await saveMessage(errorMessage, currentUser.id);
-      setMessages(prev => [...prev, errorMessage]);
+      // Save assistant message
+      await saveMessage(assistantMessage, userId);
+      
+      // Add assistant message to the chat
+      setMessages(prev => [...prev, assistantMessage]);
+    } catch (error: any) {
+      console.error('Error in handleSubmit:', error);
+      toast.error('Failed to get AI response. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -194,6 +294,12 @@ export default function AIAssistantPage() {
     }
   };
 
+  // Retry connection handler
+  const handleRetryConnection = () => {
+    setRetryCount(prev => prev + 1);
+    toast.success('Retrying connection...');
+  };
+
   // Early return if not authenticated
   if (!currentUser?.id) {
     return null;
@@ -202,6 +308,37 @@ export default function AIAssistantPage() {
   return (
     <ModernLayout title="AI Fitness Coach" description="Get personalized workout advice and plans">
       <div className="space-y-6">
+        {/* Environment Checker (Only visible in development mode) */}
+        {process.env.NODE_ENV === 'development' && (
+          <EnvChecker />
+        )}
+        
+        {/* Connection Status Banner */}
+        {connectionStatus === 'error' && connectionError && (
+          <div className="bg-red-900/20 border border-red-800 text-white rounded-lg p-4 flex justify-between items-center">
+            <div>
+              <h3 className="font-medium text-red-200">AI Service Issue</h3>
+              <p className="text-sm text-red-300 mt-1">{connectionError}</p>
+            </div>
+            <ModernButton
+              variant="outline" 
+              size="sm"
+              onClick={handleRetryConnection}
+            >
+              Retry Connection
+            </ModernButton>
+          </div>
+        )}
+        
+        {connectionStatus === 'connecting' && (
+          <div className="bg-slate-800/60 border border-slate-700 text-white rounded-lg p-4 flex items-center">
+            <div className="mr-3">
+              <div className="animate-spin rounded-full h-4 w-4 border-t-2 border-b-2 border-blue-500"></div>
+            </div>
+            <p>Connecting to AI service...</p>
+          </div>
+        )}
+      
         {/* Header with import button */}
         <div className="flex items-center justify-end">
           {process.env.NEXT_PUBLIC_ENABLE_CHATGPT_IMPORT && (
@@ -321,8 +458,8 @@ export default function AIAssistantPage() {
                   type="text"
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  disabled={isLoading}
-                  placeholder="Type your message..."
+                  disabled={isLoading || connectionStatus === 'error'}
+                  placeholder={connectionStatus === 'error' ? "AI service unavailable" : "Type your message..."}
                   className="flex-1 rounded-lg border border-slate-700 bg-slate-800/80 text-white p-2.5 
                   focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
@@ -330,7 +467,7 @@ export default function AIAssistantPage() {
                   type="submit"
                   variant="primary"
                   isLoading={isLoading}
-                  disabled={!input.trim() || isLoading}
+                  disabled={!input.trim() || isLoading || connectionStatus === 'error'}
                   icon={
                     <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />

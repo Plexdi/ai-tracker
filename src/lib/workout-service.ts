@@ -1,4 +1,4 @@
-import { getDatabase, ref, push, set, get, onValue, query, orderByChild, limitToLast, off } from 'firebase/database';
+import { getDatabase, ref, push, set, get, onValue, query, orderByChild, limitToLast, off, remove, update } from 'firebase/database';
 import app from './firebase';
 import { Workout } from './types';
 
@@ -7,8 +7,44 @@ const db = getDatabase(app);
 
 export type WorkoutInput = Omit<Workout, 'id' | 'userId' | 'createdAt'>;
 
-export const SUPPORTED_EXERCISES = ['Squat', 'Bench Press', 'Deadlift', 'Overhead Press'] as const;
+// Updated to include only SBD lifts
+export const SUPPORTED_EXERCISES = ['Squat', 'Bench Press', 'Deadlift'] as const;
+export const MUSCLE_GROUPS = [
+  'Chest', 
+  'Back', 
+  'Legs', 
+  'Quadriceps', 
+  'Hamstrings',
+  'Glutes',
+  'Calves',
+  'Shoulders',
+  'Front Delts',
+  'Side Delts',
+  'Rear Delts',
+  'Arms',
+  'Biceps',
+  'Triceps',
+  'Forearms',
+  'Core',
+  'Abs',
+  'Obliques',
+  'Lower Back',
+  'Full Body',
+  'Other'
+] as const;
+
 export type SupportedExercise = typeof SUPPORTED_EXERCISES[number];
+export type MuscleGroup = typeof MUSCLE_GROUPS[number];
+
+export interface CustomExercise {
+  id?: string;
+  name: string;
+  muscleGroup: MuscleGroup;
+  createdAt: number;
+  userId: string;
+  workingWeight?: number;
+  workingWeightUnit?: 'kg' | 'lbs';
+}
 
 export async function createWorkout(
   workout: WorkoutInput,
@@ -292,4 +328,289 @@ export function getPersonalRecords(userId: string): Promise<Record<string, Worko
       reject(error);
     });
   });
+}
+
+export async function saveCustomExercise(
+  userId: string,
+  exerciseName: string,
+  muscleGroup: MuscleGroup,
+  workingWeight?: number,
+  workingWeightUnit?: 'kg' | 'lbs'
+): Promise<string> {
+  if (!userId) {
+    throw new Error('User must be authenticated to save custom exercises');
+  }
+
+  if (!exerciseName.trim()) {
+    throw new Error('Exercise name is required');
+  }
+
+  try {
+    const exerciseRef = push(ref(db, `customExercises/${userId}`));
+    const newExercise: CustomExercise = {
+      id: exerciseRef.key!,
+      name: exerciseName.trim(),
+      muscleGroup,
+      createdAt: Date.now(),
+      userId
+    };
+    
+    // Add working weight if provided
+    if (workingWeight && workingWeight > 0 && workingWeightUnit) {
+      newExercise.workingWeight = workingWeight;
+      newExercise.workingWeightUnit = workingWeightUnit;
+    }
+    
+    await set(exerciseRef, newExercise);
+    return exerciseRef.key!;
+  } catch (error) {
+    console.error('Error saving custom exercise:', error);
+    throw new Error('Failed to save custom exercise');
+  }
+}
+
+export async function getCustomExercises(userId: string): Promise<CustomExercise[]> {
+  if (!userId) {
+    return [];
+  }
+
+  try {
+    const exercisesRef = ref(db, `customExercises/${userId}`);
+    const snapshot = await get(exercisesRef);
+    
+    if (!snapshot.exists()) {
+      return [];
+    }
+
+    const exercises: CustomExercise[] = [];
+    snapshot.forEach((child) => {
+      exercises.push(child.val() as CustomExercise);
+    });
+
+    return exercises.sort((a, b) => a.name.localeCompare(b.name));
+  } catch (error) {
+    console.error('Error fetching custom exercises:', error);
+    return [];
+  }
+}
+
+export async function deleteCustomExercise(userId: string, exerciseId: string): Promise<void> {
+  if (!userId || !exerciseId) {
+    throw new Error('Invalid user or exercise ID');
+  }
+
+  try {
+    const exerciseRef = ref(db, `customExercises/${userId}/${exerciseId}`);
+    await remove(exerciseRef);
+  } catch (error) {
+    console.error('Error deleting custom exercise:', error);
+    throw new Error('Failed to delete custom exercise');
+  }
+}
+
+export async function getExerciseCount(userId: string): Promise<Record<string, number>> {
+  if (!userId) {
+    return {};
+  }
+
+  try {
+    const workoutsRef = ref(db, `workouts/${userId}`);
+    const snapshot = await get(workoutsRef);
+    
+    if (!snapshot.exists()) {
+      return {};
+    }
+
+    const exerciseCounts: Record<string, number> = {};
+    
+    snapshot.forEach((child) => {
+      const workout = child.val() as Workout;
+      if (workout.exercise) {
+        exerciseCounts[workout.exercise] = (exerciseCounts[workout.exercise] || 0) + 1;
+      }
+    });
+    
+    return exerciseCounts;
+  } catch (error) {
+    console.error('Error getting exercise counts:', error);
+    return {};
+  }
+}
+
+export async function updateExerciseDetails(
+  userId: string, 
+  exerciseId: string, 
+  newName: string,
+  newMuscleGroup: MuscleGroup,
+  isDefaultExercise: boolean,
+  workingWeight?: number,
+  workingWeightUnit?: 'kg' | 'lbs'
+): Promise<void> {
+  if (!userId || !exerciseId || !newName.trim() || !newMuscleGroup) {
+    throw new Error('Missing required fields for updating exercise');
+  }
+
+  try {
+    // First update any workout entries with the old exercise name
+    const workoutsRef = ref(db, `workouts/${userId}`);
+    const workoutsSnapshot = await get(workoutsRef);
+    
+    if (workoutsSnapshot.exists()) {
+      const updates: Record<string, any> = {};
+      let oldExerciseName = '';
+      
+      if (isDefaultExercise) {
+        // For default exercises, the exerciseId is the same as the name
+        oldExerciseName = exerciseId;
+      } else {
+        // For custom exercises, get the old name from the custom exercise entry
+        const exerciseRef = ref(db, `customExercises/${userId}/${exerciseId}`);
+        const exerciseSnapshot = await get(exerciseRef);
+        
+        if (exerciseSnapshot.exists()) {
+          oldExerciseName = exerciseSnapshot.val().name;
+          
+          // Update the custom exercise entry
+          updates[`customExercises/${userId}/${exerciseId}/name`] = newName;
+          updates[`customExercises/${userId}/${exerciseId}/muscleGroup`] = newMuscleGroup;
+          
+          // Add working weight updates if provided
+          if (workingWeight && workingWeight > 0 && workingWeightUnit) {
+            updates[`customExercises/${userId}/${exerciseId}/workingWeight`] = workingWeight;
+            updates[`customExercises/${userId}/${exerciseId}/workingWeightUnit`] = workingWeightUnit;
+          }
+        } else {
+          throw new Error('Exercise not found');
+        }
+      }
+      
+      // Update all workouts that use this exercise name
+      workoutsSnapshot.forEach((childSnapshot) => {
+        const workout = childSnapshot.val();
+        if (workout.exercise === oldExerciseName) {
+          updates[`workouts/${userId}/${childSnapshot.key}/exercise`] = newName;
+        }
+      });
+      
+      // Apply all updates in a single transaction
+      if (Object.keys(updates).length > 0) {
+        await update(ref(db), updates);
+      }
+    }
+    
+    return;
+  } catch (error) {
+    console.error('Error updating exercise:', error);
+    throw new Error('Failed to update exercise');
+  }
+}
+
+export async function exerciseNameExists(
+  userId: string,
+  exerciseName: string,
+  excludeExerciseId?: string
+): Promise<boolean> {
+  if (!userId || !exerciseName.trim()) {
+    return false;
+  }
+
+  // Check if it's a default exercise
+  if (SUPPORTED_EXERCISES.includes(exerciseName as SupportedExercise) && 
+      exerciseName !== excludeExerciseId) {
+    return true;
+  }
+
+  try {
+    const exercisesRef = ref(db, `customExercises/${userId}`);
+    const snapshot = await get(exercisesRef);
+    
+    if (!snapshot.exists()) {
+      return false;
+    }
+
+    let exists = false;
+    snapshot.forEach((child) => {
+      const exercise = child.val() as CustomExercise;
+      // Skip the exercise being edited
+      if (exercise.id === excludeExerciseId) {
+        return;
+      }
+      
+      if (exercise.name.toLowerCase() === exerciseName.trim().toLowerCase()) {
+        exists = true;
+        return true; // Break the forEach loop
+      }
+    });
+
+    return exists;
+  } catch (error) {
+    console.error('Error checking exercise name:', error);
+    return false;
+  }
+}
+
+export async function getExerciseHistory(
+  userId: string,
+  exerciseName: string
+): Promise<Workout[]> {
+  if (!userId || !exerciseName) {
+    return [];
+  }
+
+  try {
+    const workoutsRef = ref(db, `workouts/${userId}`);
+    const snapshot = await get(workoutsRef);
+    
+    if (!snapshot.exists()) {
+      return [];
+    }
+
+    const workouts: Workout[] = [];
+    snapshot.forEach((child) => {
+      const workout = child.val() as Workout;
+      if (workout.exercise === exerciseName) {
+        workouts.push(workout);
+      }
+    });
+
+    // Sort by date (newest first)
+    return workouts.sort((a, b) => 
+      new Date(b.date).getTime() - new Date(a.date).getTime()
+    );
+  } catch (error) {
+    console.error('Error fetching exercise history:', error);
+    return [];
+  }
+}
+
+export async function updateWorkingWeight(
+  userId: string,
+  exerciseId: string,
+  workingWeight: number,
+  workingWeightUnit: 'kg' | 'lbs'
+): Promise<void> {
+  if (!userId || !exerciseId) {
+    throw new Error('User must be authenticated and exercise ID is required');
+  }
+
+  if (workingWeight <= 0) {
+    throw new Error('Working weight must be greater than zero');
+  }
+
+  try {
+    const exerciseRef = ref(db, `customExercises/${userId}/${exerciseId}`);
+    const snapshot = await get(exerciseRef);
+    
+    if (!snapshot.exists()) {
+      throw new Error('Exercise not found');
+    }
+    
+    await update(exerciseRef, {
+      workingWeight,
+      workingWeightUnit
+    });
+  } catch (error) {
+    console.error('Error updating working weight:', error);
+    throw new Error('Failed to update working weight');
+  }
 } 

@@ -85,6 +85,10 @@ export default function Dashboard() {
     }, 1000);
   }, []);
 
+  // Check if any SBD workouts exist
+  const hasWorkouts = !workoutsLoading && groupedWorkouts && 
+    Object.values(groupedWorkouts).some(workoutList => workoutList.length > 0);
+
   const exercises: SupportedExercise[] = groupedWorkouts 
     ? SUPPORTED_EXERCISES.filter(exercise => groupedWorkouts[exercise]?.length > 0)
     : [];
@@ -103,7 +107,7 @@ export default function Dashboard() {
       <GridContainer>
         {/* Workout Summary */}
         <GlassCard
-          title="Workout Summary"
+          title={hasWorkouts ? "Recent Workouts" : "Workout Summary"}
           colSpan="md:col-span-8"
         >
           {loading ? (
@@ -112,7 +116,7 @@ export default function Dashboard() {
               <div className="h-12 bg-slate-700 rounded"></div>
               <div className="h-12 bg-slate-700 rounded"></div>
             </div>
-          ) : recentWorkouts && recentWorkouts.length > 0 ? (
+          ) : hasWorkouts ? (
             <div className="space-y-4">
               {/* Workout data would go here */}
               <p>Your workout data will appear here</p>
@@ -122,7 +126,7 @@ export default function Dashboard() {
               <p className="text-slate-400 mb-4">You haven't logged any workouts yet</p>
               <ModernButton 
                 variant="primary"
-                onClick={() => {}}
+                onClick={() => router.push('/log-lift')}
                 icon={
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -141,9 +145,8 @@ export default function Dashboard() {
           colSpan="md:col-span-4"
         >
           <div className="space-y-1">
-            <StatItem label="Total Workouts" value="0" />
+            <StatItem label="Total Workouts" value={exercises.length > 0 ? `${exercises.length}` : "0"} />
             <StatItem label="This Week" value="0" />
-            <StatItem label="Workout Streak" value="0 days" />
             <StatItem label="Last Workout" value="Never" divider={false} />
           </div>
         </GlassCard>
@@ -175,14 +178,14 @@ export default function Dashboard() {
               Create a Workout Plan
             </ActionLink>
             <ActionLink 
-              href="/progress" 
+              href="/exercises" 
               icon={
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
                 </svg>
               }
             >
-              Track Progress
+              Manage Exercises
             </ActionLink>
           </div>
         </GlassCard>
@@ -217,7 +220,7 @@ export default function Dashboard() {
           <p className="text-slate-300 mb-3">Get personalized workout recommendations and nutrition advice from our AI assistant</p>
           <ModernButton 
             variant="primary"
-            onClick={() => {}}
+            onClick={() => router.push('/ai')}
             className="w-full"
             icon={
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

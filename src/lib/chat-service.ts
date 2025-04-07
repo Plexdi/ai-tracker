@@ -128,7 +128,8 @@ export async function getTodayMessages(userId: string, currentDate: string): Pro
     return messages.sort((a, b) => a.createdAt - b.createdAt);
   } catch (error) {
     console.error('Error fetching messages:', error);
-    throw new Error('Failed to fetch messages');
+    // Instead of throwing, return an empty array as a fallback
+    return [];
   }
 }
 

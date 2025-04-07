@@ -8,17 +8,28 @@ import {
   deleteTrainingBlock,
   subscribeToProgram,
   setCurrentBlock,
+  updateProgram,
+  deleteProgram,
+  checkAndDeleteCompletedPrograms,
 } from '@/lib/program-service';
 
 interface UseProgramReturn {
   program: Program | null;
   loading: boolean;
   error: string | null;
-  createNewProgram: (name: string) => Promise<string>;
+  createNewProgram: (
+    name: string, 
+    startDate?: number, 
+    daysPerWeek?: number, 
+    initialBlock?: Omit<TrainingBlock, 'id' | 'createdAt' | 'updatedAt'>
+  ) => Promise<string>;
   addBlock: (block: Omit<TrainingBlock, 'id' | 'createdAt' | 'updatedAt'>) => Promise<string>;
   updateBlock: (blockId: string, updates: Partial<TrainingBlock>) => Promise<void>;
   deleteBlock: (blockId: string) => Promise<void>;
   setActiveBlock: (blockId: string) => Promise<void>;
+  updateProgramDetails: (updates: Partial<Program>) => Promise<void>;
+  deleteCurrentProgram: () => Promise<void>;
+  checkCompletedPrograms: () => Promise<void>;
 }
 
 export function useProgram(programId?: string): UseProgramReturn {
@@ -49,12 +60,22 @@ export function useProgram(programId?: string): UseProgramReturn {
       setLoading(false);
     });
 
+    // Check for completed programs when mounting
+    if (currentUser?.id) {
+      checkAndDeleteCompletedPrograms(currentUser.id).catch(console.error);
+    }
+
     return () => {
       unsubscribe();
     };
   }, [currentUser?.id, programId]);
 
-  const createNewProgram = async (name: string) => {
+  const createNewProgram = async (
+    name: string, 
+    startDate?: number, 
+    daysPerWeek?: number, 
+    initialBlock?: Omit<TrainingBlock, 'id' | 'createdAt' | 'updatedAt'>
+  ) => {
     if (!currentUser?.id) {
       const error = new Error('User must be authenticated');
       setError(error.message);
@@ -65,7 +86,13 @@ export function useProgram(programId?: string): UseProgramReturn {
     setError(null);
 
     try {
-      const newProgramId = await createProgram(currentUser.id, name);
+      const newProgramId = await createProgram(
+        currentUser.id, 
+        name, 
+        startDate, 
+        daysPerWeek, 
+        initialBlock
+      );
       return newProgramId;
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Failed to create program';
@@ -144,6 +171,57 @@ export function useProgram(programId?: string): UseProgramReturn {
     }
   };
 
+  const updateProgramDetails = async (updates: Partial<Program>) => {
+    if (!currentUser?.id || !programId) {
+      const error = new Error('User must be authenticated and program ID is required');
+      setError(error.message);
+      throw error;
+    }
+
+    setError(null);
+    try {
+      await updateProgram(currentUser.id, programId, updates);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to update program';
+      setError(message);
+      throw error;
+    }
+  };
+
+  const deleteCurrentProgram = async () => {
+    if (!currentUser?.id || !programId) {
+      const error = new Error('User must be authenticated and program ID is required');
+      setError(error.message);
+      throw error;
+    }
+
+    setError(null);
+    try {
+      await deleteProgram(currentUser.id, programId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to delete program';
+      setError(message);
+      throw error;
+    }
+  };
+
+  const checkCompletedPrograms = async () => {
+    if (!currentUser?.id) {
+      const error = new Error('User must be authenticated');
+      setError(error.message);
+      throw error;
+    }
+
+    setError(null);
+    try {
+      await checkAndDeleteCompletedPrograms(currentUser.id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Failed to check completed programs';
+      setError(message);
+      throw error;
+    }
+  };
+
   return {
     program,
     loading,
@@ -153,5 +231,8 @@ export function useProgram(programId?: string): UseProgramReturn {
     updateBlock,
     deleteBlock,
     setActiveBlock,
+    updateProgramDetails,
+    deleteCurrentProgram,
+    checkCompletedPrograms,
   };
 } 
