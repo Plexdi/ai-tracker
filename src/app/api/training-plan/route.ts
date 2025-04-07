@@ -339,7 +339,7 @@ async function handleAddExercise(userId: string, programId: string, data: any) {
     };
     
     // Create or update the day
-    const day = week.days?.[data.day as WeekDay] || [];
+    const day = data.day as WeekDay;
     
     // Create the exercise
     const exercise: ProgramWorkout = {
@@ -351,14 +351,15 @@ async function handleAddExercise(userId: string, programId: string, data: any) {
     };
     
     // Add the exercise to the day
-    day.push(exercise);
+    const dayExercises = week.days?.[day] || [];
+    dayExercises.push(exercise);
     
     // Update the week
     const updatedWeek: WeekSchedule = {
       ...week,
       days: {
         ...week.days,
-        [data.day]: day
+        [day]: dayExercises
       }
     };
     
@@ -422,16 +423,18 @@ async function handleRemoveExercise(userId: string, programId: string, data: any
     
     // Check if day exists
     const week = block.weeks[data.weekNumber];
-    if (!week.days || !week.days[data.day] || !Array.isArray(week.days[data.day])) {
+    const day = data.day as WeekDay;
+
+    if (!week.days || !week.days[day] || !Array.isArray(week.days[day])) {
       return NextResponse.json({ 
-        error: `Day ${data.day} not found in week ${data.weekNumber}`, 
+        error: `Day ${day} not found in week ${data.weekNumber}`, 
         success: false 
       }, { status: 404 });
     }
     
     // Check if exercise exists
-    const day = week.days[data.day as WeekDay];
-    if (data.exerciseIndex < 0 || data.exerciseIndex >= day.length) {
+    const exercises = week.days[day];
+    if (data.exerciseIndex < 0 || data.exerciseIndex >= exercises.length) {
       return NextResponse.json({ 
         error: `Exercise index ${data.exerciseIndex} is out of range`, 
         success: false 
@@ -439,10 +442,10 @@ async function handleRemoveExercise(userId: string, programId: string, data: any
     }
     
     // Get the exercise that will be removed (for the success message)
-    const exerciseToRemove = day[data.exerciseIndex];
+    const exerciseToRemove = exercises[data.exerciseIndex];
     
     // Remove the exercise
-    const updatedDay = [...day];
+    const updatedDay = [...exercises];
     updatedDay.splice(data.exerciseIndex, 1);
     
     // Update the week
@@ -450,7 +453,7 @@ async function handleRemoveExercise(userId: string, programId: string, data: any
       ...week,
       days: {
         ...week.days,
-        [data.day]: updatedDay
+        [day]: updatedDay
       }
     };
     
@@ -514,16 +517,18 @@ async function handleModifyExercise(userId: string, programId: string, data: any
     
     // Check if day exists
     const week = block.weeks[data.weekNumber];
-    if (!week.days || !week.days[data.day] || !Array.isArray(week.days[data.day])) {
+    const day = data.day as WeekDay;
+
+    if (!week.days || !week.days[day] || !Array.isArray(week.days[day])) {
       return NextResponse.json({ 
-        error: `Day ${data.day} not found in week ${data.weekNumber}`, 
+        error: `Day ${day} not found in week ${data.weekNumber}`, 
         success: false 
       }, { status: 404 });
     }
     
     // Check if exercise exists
-    const day = week.days[data.day as WeekDay];
-    if (data.exerciseIndex < 0 || data.exerciseIndex >= day.length) {
+    const exercises = week.days[day];
+    if (data.exerciseIndex < 0 || data.exerciseIndex >= exercises.length) {
       return NextResponse.json({ 
         error: `Exercise index ${data.exerciseIndex} is out of range`, 
         success: false 
@@ -545,20 +550,20 @@ async function handleModifyExercise(userId: string, programId: string, data: any
     }
     
     // Get the original exercise (for the success message)
-    const originalExercise = { ...day[data.exerciseIndex] };
+    const originalExercise = { ...exercises[data.exerciseIndex] };
     
     // Update the exercise
     const updatedExercise: ProgramWorkout = {
-      ...day[data.exerciseIndex],
-      exercise: data.exercise || day[data.exerciseIndex].exercise,
-      sets: data.sets !== undefined ? data.sets : day[data.exerciseIndex].sets,
-      reps: data.reps !== undefined ? data.reps : day[data.exerciseIndex].reps,
-      rpe: data.rpe !== undefined ? data.rpe : day[data.exerciseIndex].rpe,
-      notes: data.notes !== undefined ? data.notes : day[data.exerciseIndex].notes
+      ...exercises[data.exerciseIndex],
+      exercise: data.exercise || exercises[data.exerciseIndex].exercise,
+      sets: data.sets !== undefined ? data.sets : exercises[data.exerciseIndex].sets,
+      reps: data.reps !== undefined ? data.reps : exercises[data.exerciseIndex].reps,
+      rpe: data.rpe !== undefined ? data.rpe : exercises[data.exerciseIndex].rpe,
+      notes: data.notes !== undefined ? data.notes : exercises[data.exerciseIndex].notes
     };
     
     // Update the day
-    const updatedDay = [...day];
+    const updatedDay = [...exercises];
     updatedDay[data.exerciseIndex] = updatedExercise;
     
     // Update the week
@@ -566,7 +571,7 @@ async function handleModifyExercise(userId: string, programId: string, data: any
       ...week,
       days: {
         ...week.days,
-        [data.day]: updatedDay
+        [day]: updatedDay
       }
     };
     
