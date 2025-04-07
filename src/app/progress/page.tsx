@@ -1,10 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import DashboardLayout from '@/components/DashboardLayout';
+import ModernLayout from '@/components/ModernLayout';
 import { ProgressChart } from '@/components/ProgressChart';
 import { useWorkoutVolume, usePersonalRecords } from '@/hooks/useWorkouts';
 import { SUPPORTED_EXERCISES, type SupportedExercise } from '@/lib/workout-service';
+import GlassCard from '@/components/GlassCard';
+import GridContainer from '@/components/GridContainer';
+import ModernButton from '@/components/ModernButton';
 
 type FilterExercise = 'All' | SupportedExercise;
 
@@ -24,86 +27,81 @@ export default function ProgressPage() {
   };
 
   return (
-    <DashboardLayout>
-      <div className="max-w-7xl mx-auto space-y-6 p-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Progress Tracking</h1>
-        </div>
-
+    <ModernLayout title="Progress Tracking" description="Track your fitness improvements over time">
+      <div className="space-y-8">
         {/* Exercise Filter */}
-        <div className="flex flex-wrap gap-2">
-          {exercises.map((exercise) => (
-            <button
-              key={exercise}
-              onClick={() => setSelectedExercise(exercise)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                selectedExercise === exercise
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
-            >
-              {exercise}
-            </button>
-          ))}
+        <div className="bg-slate-900/60 backdrop-blur-md border border-slate-800/60 rounded-xl p-6">
+          <h3 className="text-lg font-medium text-white mb-4">Filter by Exercise</h3>
+          <div className="flex flex-wrap gap-2">
+            {exercises.map((exercise) => (
+              <button
+                key={exercise}
+                onClick={() => setSelectedExercise(exercise)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  selectedExercise === exercise
+                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white'
+                    : 'bg-slate-800/80 text-slate-300 hover:bg-slate-700/80 hover:text-white border border-slate-700'
+                }`}
+              >
+                {exercise}
+              </button>
+            ))}
+          </div>
         </div>
 
         {/* Stats Overview */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        <GridContainer>
           {/* Weekly Volume Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
-            <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Weekly Volume</h3>
-            <div className="mt-2 flex items-baseline">
-              <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                {volume.current.toLocaleString()} kg
-              </p>
-              <p className={`ml-2 flex items-baseline text-sm font-semibold ${
-                volume.percentChange >= 0
-                  ? 'text-green-600 dark:text-green-400'
-                  : 'text-red-600 dark:text-red-400'
-              }`}>
-                <span className="mr-1">
-                  {volume.percentChange >= 0 ? '↑' : '↓'}
-                </span>
-                {Math.abs(volume.percentChange)}%
+          <GlassCard title="Weekly Volume" colSpan="md:col-span-4">
+            <div className="flex flex-col">
+              <div className="flex items-baseline">
+                <p className="text-3xl font-bold text-white">
+                  {volume.current.toLocaleString()} kg
+                </p>
+                <p className={`ml-2 flex items-baseline text-sm font-medium ${
+                  volume.percentChange >= 0
+                    ? 'text-green-400'
+                    : 'text-red-400'
+                }`}>
+                  <span className="mr-1">
+                    {volume.percentChange >= 0 ? '↑' : '↓'}
+                  </span>
+                  {Math.abs(volume.percentChange)}%
+                </p>
+              </div>
+              <p className="mt-1 text-sm text-slate-400">
+                vs last week
               </p>
             </div>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-              vs last week
-            </p>
-          </div>
+          </GlassCard>
 
           {/* Latest PR Card */}
           {selectedExercise !== 'All' && personalRecords[selectedExercise] && (
-            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
-              <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                Latest {selectedExercise} PR
-              </h3>
-              <p className="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
-                {personalRecords[selectedExercise].weight} {personalRecords[selectedExercise].unit}
-              </p>
-              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {formatDate(personalRecords[selectedExercise].date)}
-              </p>
-            </div>
+            <GlassCard title={`Latest ${selectedExercise} PR`} colSpan="md:col-span-4">
+              <div className="flex flex-col">
+                <p className="text-3xl font-bold text-white">
+                  {personalRecords[selectedExercise].weight} {personalRecords[selectedExercise].unit}
+                </p>
+                <p className="mt-1 text-sm text-slate-400">
+                  {formatDate(personalRecords[selectedExercise].date)}
+                </p>
+              </div>
+            </GlassCard>
           )}
-        </div>
+        </GridContainer>
 
         {/* Progress Chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Progress Over Time
-            </h2>
-            <div className="text-sm text-gray-500 dark:text-gray-400">
+        <GlassCard title="Progress Over Time" colSpan="md:col-span-12">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-slate-400">
               Last 10 sessions
-            </div>
+            </p>
           </div>
           {selectedExercise === 'All' ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {SUPPORTED_EXERCISES.map(exercise => (
-                <div key={exercise} className="bg-gray-50 dark:bg-gray-700/50 rounded-xl p-4">
-                  <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
+                <div key={exercise} className="bg-slate-800/50 rounded-xl p-4">
+                  <h3 className="text-sm font-medium text-slate-300 mb-4">
                     {exercise} Progress (Estimated 1RM)
                   </h3>
                   <div className="h-[300px]">
@@ -114,37 +112,34 @@ export default function ProgressPage() {
             </div>
           ) : (
             <div className="h-[400px]">
-              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-4">
+              <h3 className="text-sm font-medium text-slate-300 mb-4">
                 {selectedExercise} Progress (Estimated 1RM)
               </h3>
               <ProgressChart exercise={selectedExercise as SupportedExercise} />
             </div>
           )}
-        </div>
+        </GlassCard>
 
         {/* Recent PRs Grid */}
-        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-md p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            All-Time Personal Records
-          </h2>
+        <GlassCard title="All-Time Personal Records" colSpan="md:col-span-12">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {Object.entries(personalRecords).map(([exercise, workout]) => (
               <div
                 key={exercise}
-                className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4"
+                className="bg-slate-800/50 rounded-lg p-4"
               >
-                <div className="text-sm text-gray-500 dark:text-gray-400">{exercise}</div>
-                <div className="text-2xl font-bold text-gray-900 dark:text-white mt-1">
+                <div className="text-sm text-slate-400">{exercise}</div>
+                <div className="text-2xl font-bold text-white mt-1">
                   {workout.weight} {workout.unit}
                 </div>
-                <div className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                <div className="text-sm text-slate-400 mt-2">
                   {formatDate(workout.date)}
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </GlassCard>
       </div>
-    </DashboardLayout>
+    </ModernLayout>
   );
 } 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useStore } from '@/lib/zustandStore';
 import { onAuthStateChanged } from 'firebase/auth';
@@ -9,6 +9,13 @@ import { ProgressChart } from '@/components/ProgressChart';
 import { useWorkoutVolume, usePersonalRecords, useWorkoutsByExercise } from '@/hooks/useWorkouts';
 import { SUPPORTED_EXERCISES, SupportedExercise } from '@/lib/workout-service';
 import DashboardLayout from '../../components/DashboardLayout';
+import DashboardHorizontalProfile from '@/components/DashboardHorizontalProfile';
+import ModernLayout from '@/components/ModernLayout';
+import GlassCard from '@/components/GlassCard';
+import GridContainer from '@/components/GridContainer';
+import ActionLink from '@/components/ActionLink';
+import StatItem from '@/components/StatItem';
+import ModernButton from '@/components/ModernButton';
 
 // Dummy data for demonstration
 const stats = {
@@ -44,12 +51,15 @@ const StatCard = ({ title, value, unit, subtitle, icon, color }: StatCardProps) 
   </div>
 );
 
-export default function DashboardPage() {
+export default function Dashboard() {
   const router = useRouter();
   const setCurrentUser = useStore((state) => state.setCurrentUser);
   const { volume, loading: volumeLoading } = useWorkoutVolume(7);
   const { personalRecords, loading: prLoading } = usePersonalRecords();
   const { workouts: groupedWorkouts, loading: workoutsLoading } = useWorkoutsByExercise();
+  const { currentUser } = useStore();
+  const [recentWorkouts, setRecentWorkouts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -68,114 +78,157 @@ export default function DashboardPage() {
     return () => unsubscribe();
   }, [router, setCurrentUser]);
 
+  useEffect(() => {
+    // Simulate loading data
+    setTimeout(() => {
+      setLoading(false);
+    }, 1000);
+  }, []);
+
   const exercises: SupportedExercise[] = groupedWorkouts 
     ? SUPPORTED_EXERCISES.filter(exercise => groupedWorkouts[exercise]?.length > 0)
     : [];
 
   return (
-    <DashboardLayout>
-      <div className="p-6 space-y-6">
-        {/* Volume Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-            <h3 className="text-lg font-semibold mb-2">Weekly Volume</h3>
-            {volumeLoading ? (
-              <div className="animate-pulse h-16 bg-gray-200 dark:bg-gray-700 rounded" />
-            ) : (
-              <div>
-                <p className="text-3xl font-bold">{volume.current.toLocaleString()} kg</p>
-                <p className={`text-sm ${volume.percentChange > 0 ? 'text-green-500' : 'text-red-500'}`}>
-                  {volume.percentChange > 0 ? '↑' : '↓'} {Math.abs(volume.percentChange)}% from last week
-                </p>
-              </div>
-            )}
-          </div>
+    <ModernLayout
+      title="Dashboard"
+      description="Your fitness journey at a glance"
+    >
+      {/* Profile Section */}
+      <section className="mb-8">
+        <DashboardHorizontalProfile />
+      </section>
 
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-            <h3 className="text-lg font-semibold mb-2">Active Exercises</h3>
-            {workoutsLoading ? (
-              <div className="animate-pulse h-16 bg-gray-200 dark:bg-gray-700 rounded" />
-            ) : (
-              <div>
-                <p className="text-3xl font-bold">{exercises.length}</p>
-                <p className="text-sm text-gray-500">Different exercises tracked</p>
-              </div>
-            )}
-          </div>
-
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-            <h3 className="text-lg font-semibold mb-2">Personal Records</h3>
-            {prLoading ? (
-              <div className="animate-pulse h-16 bg-gray-200 dark:bg-gray-700 rounded" />
-            ) : (
-              <div>
-                <p className="text-3xl font-bold">{Object.keys(personalRecords).length}</p>
-                <p className="text-sm text-gray-500">PRs achieved</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Progress Charts */}
-        <div className="space-y-6">
-          {exercises.map(exercise => (
-            <div key={exercise} className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow">
-              <h3 className="text-lg font-semibold mb-4">{exercise} Progress</h3>
-              <ProgressChart exercise={exercise} />
+      {/* Main Dashboard Content */}
+      <GridContainer>
+        {/* Workout Summary */}
+        <GlassCard
+          title="Workout Summary"
+          colSpan="md:col-span-8"
+        >
+          {loading ? (
+            <div className="animate-pulse space-y-3">
+              <div className="h-12 bg-slate-700 rounded"></div>
+              <div className="h-12 bg-slate-700 rounded"></div>
+              <div className="h-12 bg-slate-700 rounded"></div>
             </div>
-          ))}
-        </div>
+          ) : recentWorkouts && recentWorkouts.length > 0 ? (
+            <div className="space-y-4">
+              {/* Workout data would go here */}
+              <p>Your workout data will appear here</p>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-slate-400 mb-4">You haven't logged any workouts yet</p>
+              <ModernButton 
+                variant="primary"
+                onClick={() => {}}
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                }
+              >
+                Log Your First Workout
+              </ModernButton>
+            </div>
+          )}
+        </GlassCard>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          <StatCard
-            title="Training Streak"
-            value={stats.streak}
-            unit="days"
-            subtitle="🔥 Keep it up!"
-            icon="🎯"
-            color="text-blue-600 dark:text-blue-400"
-          />
-          <StatCard
-            title="Today's Progress"
-            value={stats.todayCalories}
-            unit="kcal"
-            subtitle="💪 Daily Goal: 2500 kcal"
-            icon="📊"
-            color="text-green-600 dark:text-green-400"
-          />
-          <StatCard
-            title="Monthly Workouts"
-            value={stats.monthlyWorkouts}
-            unit="sessions"
-            subtitle="🎯 Goal: 20 sessions"
-            icon="📅"
-            color="text-orange-600 dark:text-orange-400"
-          />
-          <StatCard
-            title="PR Progress"
-            value={`${stats.prProgress}%`}
-            subtitle="🏋️‍♂️ Bench Press Goal"
-            icon="💪"
-            color="text-red-600 dark:text-red-400"
-          />
-          <StatCard
-            title="Next Workout"
-            value={stats.nextWorkout}
-            subtitle="⏰ Leg Day"
-            icon="🕒"
-            color="text-indigo-600 dark:text-indigo-400"
-          />
-        </div>
+        {/* Quick Stats */}
+        <GlassCard
+          title="Quick Stats"
+          colSpan="md:col-span-4"
+        >
+          <div className="space-y-1">
+            <StatItem label="Total Workouts" value="0" />
+            <StatItem label="This Week" value="0" />
+            <StatItem label="Workout Streak" value="0 days" />
+            <StatItem label="Last Workout" value="Never" divider={false} />
+          </div>
+        </GlassCard>
 
-        {/* Motivational Quote */}
-        <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl shadow-md p-6 text-white">
-          <p className="text-lg font-medium leading-relaxed">
-            "The only bad workout is the one that didn't happen."
-          </p>
-          <p className="text-sm mt-2 opacity-80">Daily Motivation</p>
-        </div>
-      </div>
-    </DashboardLayout>
+        {/* Quick Actions */}
+        <GlassCard
+          title="Quick Actions"
+          colSpan="md:col-span-4"
+        >
+          <div className="space-y-2">
+            <ActionLink 
+              href="/log-lift" 
+              icon={
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                </svg>
+              }
+            >
+              Log a Workout
+            </ActionLink>
+            <ActionLink 
+              href="/plan" 
+              icon={
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                </svg>
+              }
+            >
+              Create a Workout Plan
+            </ActionLink>
+            <ActionLink 
+              href="/progress" 
+              icon={
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                </svg>
+              }
+            >
+              Track Progress
+            </ActionLink>
+          </div>
+        </GlassCard>
+
+        {/* Fitness Goals */}
+        <GlassCard
+          title="Your Fitness Goals"
+          colSpan="md:col-span-4"
+        >
+          <div className="border border-dashed border-slate-700 rounded-lg p-4 text-center">
+            <p className="text-slate-400 text-sm">Set fitness goals in your profile</p>
+            <ActionLink 
+              href="/profile" 
+              icon={
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              }
+              className="justify-center mt-2"
+            >
+              Update Profile
+            </ActionLink>
+          </div>
+        </GlassCard>
+
+        {/* AI Assistant Suggestion */}
+        <GlassCard
+          title="AI Assistant"
+          colSpan="md:col-span-4"
+          className="bg-gradient-to-br from-slate-900/90 to-blue-900/20"
+        >
+          <p className="text-slate-300 mb-3">Get personalized workout recommendations and nutrition advice from our AI assistant</p>
+          <ModernButton 
+            variant="primary"
+            onClick={() => {}}
+            className="w-full"
+            icon={
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
+            }
+          >
+            Chat with AI Assistant
+          </ModernButton>
+        </GlassCard>
+      </GridContainer>
+    </ModernLayout>
   );
 } 

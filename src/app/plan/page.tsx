@@ -9,7 +9,10 @@ import { useStore } from '@/lib/zustandStore';
 import { onAuthStateChanged } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { toast } from 'react-hot-toast';
-import DashboardLayout from '../../components/DashboardLayout';
+import ModernLayout from '@/components/ModernLayout';
+import GlassCard from '@/components/GlassCard';
+import GridContainer from '@/components/GridContainer';
+import ModernButton from '@/components/ModernButton';
 import { updateWeekWorkouts, getUserProgramId } from '@/lib/program-service';
 
 interface BlockFormData {
@@ -382,7 +385,7 @@ export default function PlanPage() {
 
   if (!currentUser) {
     return (
-      <DashboardLayout>
+      <ModernLayout title="Training Plans" description="Create and manage your workout programs">
         <div className="flex flex-col items-center justify-center min-h-screen p-6">
           <h1 className="text-2xl font-bold mb-4">Welcome to Training Programs</h1>
           <p className="text-gray-600 dark:text-gray-400 mb-8">
@@ -395,23 +398,23 @@ export default function PlanPage() {
             Log In
           </button>
         </div>
-      </DashboardLayout>
+      </ModernLayout>
     );
   }
 
   if (loading) {
     return (
-      <DashboardLayout>
+      <ModernLayout title="Training Plans" description="Create and manage your workout programs">
         <div className="flex items-center justify-center min-h-screen">
           <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
         </div>
-      </DashboardLayout>
+      </ModernLayout>
     );
   }
 
   if (!program && !loading) {
     return (
-      <DashboardLayout>
+      <ModernLayout title="Training Plans" description="Create and manage your workout programs">
         <div className="flex flex-col items-center justify-center min-h-screen p-6">
           <h1 className="text-2xl font-bold mb-4">Welcome to Training Programs</h1>
           <p className="text-gray-600 dark:text-gray-400 mb-8">
@@ -468,274 +471,352 @@ export default function PlanPage() {
             </div>
           </div>
         )}
-      </DashboardLayout>
+      </ModernLayout>
     );
   }
 
   return (
-    <DashboardLayout>
-      <div className="container mx-auto p-6 max-w-7xl">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-2xl font-bold">{program?.name || 'Training Program'}</h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
-              {program?.blocks?.length || 0} training blocks
-            </p>
-          </div>
-          <button
-            onClick={() => setShowBlockForm(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Add Training Block
-          </button>
-        </div>
-
-        {/* Loading State */}
-        {loading && (
-          <div className="flex items-center justify-center min-h-screen">
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!loading && (!program?.blocks || program.blocks.length === 0) && (
-          <div className="text-center py-12">
-            <p className="text-gray-600 dark:text-gray-400">
-              No training blocks yet. Click "Add Training Block" to get started.
-            </p>
-          </div>
-        )}
-
-        {/* Training Blocks */}
-        {!loading && program?.blocks && program.blocks.length > 0 && (
-          <div className="space-y-6">
-            {program.blocks.map((block) => (
-              <div
-                key={block.id}
-                className={`bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 ${
-                  block.status === 'Current' ? 'ring-2 ring-blue-500' : ''
-                }`}
-              >
-                {/* Block Header */}
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h2 className="text-xl font-semibold">{block.name}</h2>
-                    <p className="text-gray-600 dark:text-gray-400">
-                      Weeks {block.startWeek}–{block.endWeek} • {block.focus === 'Custom' ? block.customFocus : block.focus}
-                    </p>
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {block.workoutDays.map((day) => (
-                        <span
-                          key={day}
-                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-                        >
-                          {day.slice(0, 3)}
-                        </span>
-                      ))}
-                    </div>
-                    {block.notes && (
-                      <p className="text-gray-600 dark:text-gray-400 mt-2 text-sm">
-                        {block.notes}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex space-x-2">
-                    <button
-                      onClick={() => setActiveBlock(block.id)}
-                      className={`px-3 py-1 rounded ${
-                        block.status === 'Current'
-                          ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                          : block.status === 'Completed'
-                          ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                          : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                      }`}
-                    >
-                      {block.status}
-                    </button>
-                    <button
+    <ModernLayout title="Training Plans" description="Create and manage your workout programs">
+      <div className="space-y-8">
+        {program ? (
+          <>
+            <GlassCard title={program.name} colSpan="md:col-span-12">
+              <div className="space-y-6">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between">
+                  <p className="text-slate-300">
+                    {program.blocks.length} training {program.blocks.length === 1 ? 'block' : 'blocks'}
+                  </p>
+                  <div className="flex gap-3 mt-3 md:mt-0">
+                    <ModernButton
+                      variant="secondary"
                       onClick={() => {
-                        setEditingBlockId(block.id);
+                        setShowBlockForm(true);
+                        setEditingBlockId(null);
                         setBlockFormData({
-                          name: block.name,
-                          startWeek: block.startWeek,
-                          endWeek: block.endWeek,
-                          focus: block.focus,
-                          customFocus: block.customFocus,
-                          workoutDays: block.workoutDays,
-                          notes: block.notes,
+                          name: '',
+                          startWeek: 1,
+                          endWeek: 4,
+                          focus: 'Volume',
+                          workoutDays: [],
                         });
                       }}
-                      className="text-gray-600 hover:text-blue-600 dark:text-gray-400 dark:hover:text-blue-400"
+                      icon={
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                        </svg>
+                      }
                     >
-                      Edit
-                    </button>
-                    <button
-                      onClick={() => handleDeleteBlock(block.id)}
-                      className="text-gray-600 hover:text-red-600 dark:text-gray-400 dark:hover:text-red-400"
-                    >
-                      Delete
-                    </button>
+                      Add Block
+                    </ModernButton>
                   </div>
                 </div>
 
-                {/* Week Selection */}
-                <div className="mb-4">
-                  <div className="flex space-x-2 overflow-x-auto pb-2">
-                    {Array.from(
-                      { length: block.endWeek - block.startWeek + 1 },
-                      (_, i) => block.startWeek + i
-                    ).map((weekNum) => (
-                      <button
-                        key={weekNum}
-                        onClick={() => {
-                          setSelectedWeek(weekNum);
-                          setExpandedBlockId(block.id);
-                        }}
-                        className={`px-3 py-1 rounded-lg text-sm ${
-                          selectedWeek === weekNum && expandedBlockId === block.id
-                            ? 'bg-blue-600 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
-                        }`}
-                      >
-                        Week {weekNum}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Workouts Grid */}
-                {expandedBlockId === block.id && selectedWeek !== null && (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-4 mt-4">
-                    {ALL_WEEK_DAYS.map((day) => (
+                {/* Training Blocks */}
+                <div className="space-y-4">
+                  {program.blocks.map((block) => (
+                    <div
+                      key={block.id}
+                      className="bg-slate-800/60 border border-slate-700/60 rounded-xl overflow-hidden"
+                    >
                       <div
-                        key={day}
-                        className={`space-y-2 ${
-                          !block.workoutDays.includes(day) ? 'opacity-50' : ''
-                        }`}
+                        className="p-4 cursor-pointer flex items-center justify-between border-b border-slate-700/60"
+                        onClick={() => {
+                          if (expandedBlockId === block.id) {
+                            setExpandedBlockId(null);
+                          } else {
+                            setExpandedBlockId(block.id);
+                            // Load the first week by default
+                            const firstWeek = block.startWeek || Math.min(...Object.keys(block.weeks || {}).map(Number));
+                            setSelectedWeek(firstWeek);
+                          }
+                        }}
                       >
-                        <div className="flex justify-between items-center">
-                          <h3 className="font-medium text-sm">{day}</h3>
-                          {block.workoutDays.includes(day) && (
-                            <button
-                              onClick={() => {
-                                setSelectedBlockId(block.id);
-                                setSelectedDay(day);
-                                setShowWorkoutForm(true);
-                              }}
-                              className="text-blue-600 hover:text-blue-700 text-sm"
-                            >
-                              +
-                            </button>
-                          )}
+                        <div>
+                          <h3 className="text-lg font-medium text-white">
+                            {block.name}
+                          </h3>
+                          <p className="text-sm text-slate-400">
+                            Weeks {block.startWeek}-{block.endWeek} • {block.focus === 'Custom' ? block.customFocus : block.focus}
+                          </p>
                         </div>
-                        {block.weeks?.[selectedWeek]?.days?.[day]?.map((workout, index) => (
-                          <div
-                            key={index}
-                            className="bg-gray-50 dark:bg-gray-700 p-2 rounded text-sm"
+                        <div className="flex items-center space-x-3">
+                          <span className="text-sm font-medium px-3 py-1 rounded-full bg-slate-700/60 text-slate-300">
+                            {block.status}
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowBlockForm(true);
+                              setEditingBlockId(block.id);
+                              setBlockFormData({
+                                name: block.name,
+                                startWeek: block.startWeek,
+                                endWeek: block.endWeek,
+                                focus: block.focus,
+                                customFocus: block.customFocus,
+                                workoutDays: block.workoutDays,
+                                notes: block.notes,
+                              });
+                            }}
+                            className="p-1 rounded-full text-slate-400 hover:text-white transition-colors"
                           >
-                            <div className="flex justify-between items-start">
-                              <div>
-                                <p className="font-medium">{workout.exercise}</p>
-                                <p className="text-gray-600 dark:text-gray-400">
-                                  {workout.sets}×{workout.reps}
-                                  {workout.rpe && ` @${workout.rpe}`}
-                                </p>
-                                {workout.notes && (
-                                  <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">
-                                    {workout.notes}
-                                  </p>
-                                )}
-                              </div>
-                              <button
-                                onClick={() => handleDeleteWorkout(block.id, selectedWeek, day, index)}
-                                className="text-red-600 hover:text-red-700 text-xs"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                        {block.workoutDays.includes(day) && (!block.weeks?.[selectedWeek]?.days?.[day] || block.weeks[selectedWeek].days[day].length === 0) && (
-                          <div className="text-gray-500 dark:text-gray-400 text-sm text-center py-2">
-                            No workouts scheduled
-                          </div>
-                        )}
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (window.confirm(`Are you sure you want to delete "${block.name}"?`)) {
+                                handleDeleteBlock(block.id);
+                              }
+                            }}
+                            className="p-1 rounded-full text-slate-400 hover:text-red-500 transition-colors"
+                          >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                )}
+
+                      {expandedBlockId === block.id && selectedWeek !== null && (
+                        <div className="p-4">
+                          {/* Week selector tabs */}
+                          <div className="flex overflow-x-auto space-x-2 pb-4">
+                            {Array.from(
+                              { length: block.endWeek - block.startWeek + 1 },
+                              (_, i) => block.startWeek + i
+                            ).map((week) => (
+                              <button
+                                key={week}
+                                onClick={() => setSelectedWeek(week)}
+                                className={`px-4 py-2 text-sm font-medium rounded-lg whitespace-nowrap ${
+                                  selectedWeek === week
+                                    ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white'
+                                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                                }`}
+                              >
+                                Week {week}
+                              </button>
+                            ))}
+                          </div>
+
+                          {/* Workout schedule for the selected week */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+                            {block.workoutDays.map((day) => {
+                              const workouts = block.weeks && block.weeks[selectedWeek]?.days[day] || [];
+                              return (
+                                <div key={day} className="bg-slate-900/60 rounded-lg p-4">
+                                  <div className="flex justify-between items-center mb-3">
+                                    <h4 className="font-medium text-white capitalize">{day}</h4>
+                                    <ModernButton
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => {
+                                        setSelectedDay(day);
+                                        setSelectedBlockId(block.id);
+                                        setShowWorkoutForm(true);
+                                        setWorkoutFormData({
+                                          exercise: SUPPORTED_EXERCISES[0],
+                                          sets: 3,
+                                          reps: 8,
+                                          rpe: 7,
+                                        });
+                                      }}
+                                      icon={
+                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                        </svg>
+                                      }
+                                    >
+                                      Add
+                                    </ModernButton>
+                                  </div>
+
+                                  {workouts.length === 0 ? (
+                                    <p className="text-sm text-slate-400 italic">No exercises planned</p>
+                                  ) : (
+                                    <div className="space-y-3">
+                                      {workouts.map((workout, index) => (
+                                        <div key={index} className="bg-slate-800/80 rounded p-2 text-sm">
+                                          <div className="flex justify-between">
+                                            <span className="font-medium text-white">{workout.exercise}</span>
+                                            <button
+                                              onClick={() => {
+                                                if (
+                                                  window.confirm(
+                                                    `Are you sure you want to remove ${workout.exercise}?`
+                                                  )
+                                                ) {
+                                                  handleDeleteWorkout(
+                                                    block.id,
+                                                    selectedWeek,
+                                                    day,
+                                                    index
+                                                  );
+                                                }
+                                              }}
+                                              className="text-slate-400 hover:text-red-500"
+                                            >
+                                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                              </svg>
+                                            </button>
+                                          </div>
+                                          <div className="text-slate-300 flex gap-2 mt-1">
+                                            <span>{workout.sets} × {workout.reps}</span>
+                                            {workout.rpe && <span>@RPE {workout.rpe}</span>}
+                                          </div>
+                                          {workout.notes && (
+                                            <p className="mt-1 text-slate-400 text-xs">{workout.notes}</p>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
-            ))}
+            </GlassCard>
+          </>
+        ) : loading ? (
+          <GlassCard colSpan="md:col-span-12">
+            <div className="flex justify-center items-center p-8">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+            </div>
+          </GlassCard>
+        ) : (
+          <GlassCard title="Create Your Training Program" colSpan="md:col-span-12">
+            <div className="flex flex-col items-center justify-center text-center p-8 space-y-6">
+              <p className="text-slate-300 max-w-md">
+                You don't have a training program yet. Start by creating one to organize your workout plans.
+              </p>
+              <ModernButton
+                variant="primary"
+                onClick={() => setShowProgramForm(true)}
+                icon={
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                  </svg>
+                }
+              >
+                Create Program
+              </ModernButton>
+            </div>
+          </GlassCard>
+        )}
+
+        {/* Program Creation Modal */}
+        {showProgramForm && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-md p-6 shadow-xl">
+              <h2 className="text-xl font-bold text-white mb-4">Create Program</h2>
+              <form onSubmit={handleCreateProgram}>
+                <div className="mb-4">
+                  <label htmlFor="programName" className="block text-sm font-medium text-slate-300 mb-1">
+                    Program Name
+                  </label>
+                  <input
+                    type="text"
+                    id="programName"
+                    className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={programFormData.name}
+                    onChange={(e) => setProgramFormData({ ...programFormData, name: e.target.value })}
+                    required
+                  />
+                </div>
+                <div className="flex justify-end space-x-3 mt-6">
+                  <ModernButton
+                    type="button"
+                    variant="outline"
+                    onClick={() => setShowProgramForm(false)}
+                  >
+                    Cancel
+                  </ModernButton>
+                  <ModernButton
+                    type="submit"
+                    variant="primary"
+                    isLoading={isSubmitting}
+                  >
+                    Create
+                  </ModernButton>
+                </div>
+              </form>
+            </div>
           </div>
         )}
 
         {/* Block Form Modal */}
-        {(showBlockForm || editingBlockId) && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-              <h2 className="text-xl font-semibold mb-4">
+        {showBlockForm && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-md p-6 shadow-xl overflow-y-auto max-h-[90vh]">
+              <h2 className="text-xl font-bold text-white mb-4">
                 {editingBlockId ? 'Edit Training Block' : 'Add Training Block'}
               </h2>
               <form onSubmit={editingBlockId ? handleUpdateBlock : handleAddBlock}>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Block Name</label>
+                    <label htmlFor="blockName" className="block text-sm font-medium text-slate-300 mb-1">
+                      Block Name
+                    </label>
                     <input
                       type="text"
+                      id="blockName"
+                      className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       value={blockFormData.name}
-                      onChange={(e) =>
-                        setBlockFormData((prev) => ({ ...prev, name: e.target.value }))
-                      }
-                      className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                      placeholder="e.g., Strength Block 1"
+                      onChange={(e) => setBlockFormData({ ...blockFormData, name: e.target.value })}
                       required
                     />
                   </div>
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Start Week</label>
+                      <label htmlFor="startWeek" className="block text-sm font-medium text-slate-300 mb-1">
+                        Start Week
+                      </label>
                       <input
                         type="number"
+                        id="startWeek"
+                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         value={blockFormData.startWeek}
-                        onChange={(e) =>
-                          setBlockFormData((prev) => ({
-                            ...prev,
-                            startWeek: parseInt(e.target.value),
-                          }))
-                        }
+                        onChange={(e) => setBlockFormData({ ...blockFormData, startWeek: parseInt(e.target.value) })}
                         min="1"
-                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
                         required
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">End Week</label>
+                      <label htmlFor="endWeek" className="block text-sm font-medium text-slate-300 mb-1">
+                        End Week
+                      </label>
                       <input
                         type="number"
+                        id="endWeek"
+                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         value={blockFormData.endWeek}
-                        onChange={(e) =>
-                          setBlockFormData((prev) => ({
-                            ...prev,
-                            endWeek: parseInt(e.target.value),
-                          }))
-                        }
-                        min={blockFormData.startWeek}
-                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                        onChange={(e) => setBlockFormData({ ...blockFormData, endWeek: parseInt(e.target.value) })}
+                        min={blockFormData.startWeek + 1}
                         required
                       />
                     </div>
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium mb-1">Block Focus</label>
+                    <label htmlFor="focus" className="block text-sm font-medium text-slate-300 mb-1">
+                      Training Focus
+                    </label>
                     <select
+                      id="focus"
+                      className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       value={blockFormData.focus}
-                      onChange={(e) =>
-                        setBlockFormData((prev) => ({
-                          ...prev,
-                          focus: e.target.value as BlockFormData['focus'],
-                        }))
-                      }
-                      className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                      onChange={(e) => setBlockFormData({ ...blockFormData, focus: e.target.value as any })}
                       required
                     >
                       <option value="Volume">Volume</option>
@@ -745,84 +826,82 @@ export default function PlanPage() {
                       <option value="Custom">Custom</option>
                     </select>
                   </div>
+
                   {blockFormData.focus === 'Custom' && (
                     <div>
-                      <label className="block text-sm font-medium mb-1">Custom Focus</label>
+                      <label htmlFor="customFocus" className="block text-sm font-medium text-slate-300 mb-1">
+                        Custom Focus Description
+                      </label>
                       <input
                         type="text"
+                        id="customFocus"
+                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         value={blockFormData.customFocus || ''}
-                        onChange={(e) =>
-                          setBlockFormData((prev) => ({
-                            ...prev,
-                            customFocus: e.target.value,
-                          }))
-                        }
-                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                        placeholder="e.g., Technique"
+                        onChange={(e) => setBlockFormData({ ...blockFormData, customFocus: e.target.value })}
                         required={blockFormData.focus === 'Custom'}
                       />
                     </div>
                   )}
+
                   <div>
-                    <label className="block text-sm font-medium mb-1">Workout Days</label>
-                    <div className="grid grid-cols-4 gap-2">
-                      {(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] as WeekDay[]).map((day) => (
-                        <label key={day} className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            checked={blockFormData.workoutDays.includes(day)}
-                            onChange={(e) => {
-                              setBlockFormData((prev) => ({
-                                ...prev,
-                                workoutDays: e.target.checked
-                                  ? [...prev.workoutDays, day]
-                                  : prev.workoutDays.filter((d) => d !== day),
-                              }));
-                            }}
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
-                          />
-                          <span className="text-sm">{day.slice(0, 3)}</span>
-                        </label>
+                    <span className="block text-sm font-medium text-slate-300 mb-2">
+                      Workout Days
+                    </span>
+                    <div className="flex flex-wrap gap-2">
+                      {ALL_WEEK_DAYS.map((day) => (
+                        <button
+                          key={day}
+                          type="button"
+                          className={`px-3 py-1 rounded-lg text-sm font-medium ${
+                            blockFormData.workoutDays.includes(day)
+                              ? 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white'
+                              : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+                          }`}
+                          onClick={() => {
+                            const newWorkoutDays = blockFormData.workoutDays.includes(day)
+                              ? blockFormData.workoutDays.filter((d) => d !== day)
+                              : [...blockFormData.workoutDays, day];
+                            setBlockFormData({ ...blockFormData, workoutDays: newWorkoutDays });
+                          }}
+                        >
+                          {day}
+                        </button>
                       ))}
                     </div>
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium mb-1">Notes (Optional)</label>
+                    <label htmlFor="notes" className="block text-sm font-medium text-slate-300 mb-1">
+                      Notes (Optional)
+                    </label>
                     <textarea
+                      id="notes"
+                      className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       value={blockFormData.notes || ''}
-                      onChange={(e) =>
-                        setBlockFormData((prev) => ({ ...prev, notes: e.target.value }))
-                      }
-                      className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                      onChange={(e) => setBlockFormData({ ...blockFormData, notes: e.target.value })}
                       rows={3}
-                      placeholder="Add any additional notes about this training block..."
                     />
                   </div>
                 </div>
+
                 <div className="flex justify-end space-x-3 mt-6">
-                  <button
+                  <ModernButton
                     type="button"
+                    variant="outline"
                     onClick={() => {
                       setShowBlockForm(false);
                       setEditingBlockId(null);
-                      setBlockFormData({
-                        name: '',
-                        startWeek: 1,
-                        endWeek: 4,
-                        focus: 'Volume',
-                        workoutDays: [],
-                      });
                     }}
-                    className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
                   >
                     Cancel
-                  </button>
-                  <button
+                  </ModernButton>
+                  <ModernButton
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    variant="primary"
+                    isLoading={isSubmitting}
                   >
-                    {editingBlockId ? 'Update Block' : 'Add Block'}
-                  </button>
+                    {editingBlockId ? 'Update' : 'Add'}
+                  </ModernButton>
                 </div>
               </form>
             </div>
@@ -830,23 +909,23 @@ export default function PlanPage() {
         )}
 
         {/* Workout Form Modal */}
-        {showWorkoutForm && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
-              <h2 className="text-xl font-semibold mb-4">Add Workout</h2>
+        {showWorkoutForm && selectedDay && selectedBlockId && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-900 border border-slate-800 rounded-xl w-full max-w-md p-6 shadow-xl">
+              <h2 className="text-xl font-bold text-white mb-4">
+                Add Exercise - {selectedDay} (Week {selectedWeek})
+              </h2>
               <form onSubmit={handleAddWorkout}>
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Exercise</label>
+                    <label htmlFor="exercise" className="block text-sm font-medium text-slate-300 mb-1">
+                      Exercise
+                    </label>
                     <select
+                      id="exercise"
+                      className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       value={workoutFormData.exercise}
-                      onChange={(e) =>
-                        setWorkoutFormData((prev) => ({
-                          ...prev,
-                          exercise: e.target.value,
-                        }))
-                      }
-                      className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                      onChange={(e) => setWorkoutFormData({ ...workoutFormData, exercise: e.target.value })}
                       required
                     >
                       {SUPPORTED_EXERCISES.map((exercise) => (
@@ -856,99 +935,88 @@ export default function PlanPage() {
                       ))}
                     </select>
                   </div>
+
                   <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-sm font-medium mb-1">Sets</label>
+                      <label htmlFor="sets" className="block text-sm font-medium text-slate-300 mb-1">
+                        Sets
+                      </label>
                       <input
                         type="number"
+                        id="sets"
+                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         value={workoutFormData.sets}
-                        onChange={(e) =>
-                          setWorkoutFormData((prev) => ({
-                            ...prev,
-                            sets: parseInt(e.target.value),
-                          }))
-                        }
+                        onChange={(e) => setWorkoutFormData({ ...workoutFormData, sets: parseInt(e.target.value) })}
                         min="1"
-                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
                         required
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Reps</label>
+                      <label htmlFor="reps" className="block text-sm font-medium text-slate-300 mb-1">
+                        Reps
+                      </label>
                       <input
                         type="number"
+                        id="reps"
+                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         value={workoutFormData.reps}
-                        onChange={(e) =>
-                          setWorkoutFormData((prev) => ({
-                            ...prev,
-                            reps: parseInt(e.target.value),
-                          }))
-                        }
+                        onChange={(e) => setWorkoutFormData({ ...workoutFormData, reps: parseInt(e.target.value) })}
                         min="1"
-                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
                         required
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">RPE</label>
+                      <label htmlFor="rpe" className="block text-sm font-medium text-slate-300 mb-1">
+                        RPE
+                      </label>
                       <input
                         type="number"
+                        id="rpe"
+                        className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         value={workoutFormData.rpe || ''}
-                        onChange={(e) =>
-                          setWorkoutFormData((prev) => ({
-                            ...prev,
-                            rpe: parseInt(e.target.value),
-                          }))
-                        }
+                        onChange={(e) => setWorkoutFormData({ ...workoutFormData, rpe: parseInt(e.target.value) })}
                         min="1"
                         max="10"
-                        className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
+                        step="0.5"
                       />
                     </div>
                   </div>
+
                   <div>
-                    <label className="block text-sm font-medium mb-1">Notes (Optional)</label>
+                    <label htmlFor="workoutNotes" className="block text-sm font-medium text-slate-300 mb-1">
+                      Notes (Optional)
+                    </label>
                     <textarea
+                      id="workoutNotes"
+                      className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       value={workoutFormData.notes || ''}
-                      onChange={(e) =>
-                        setWorkoutFormData((prev) => ({
-                          ...prev,
-                          notes: e.target.value,
-                        }))
-                      }
-                      className="w-full px-3 py-2 border rounded-lg dark:bg-gray-700 dark:border-gray-600"
-                      rows={3}
+                      onChange={(e) => setWorkoutFormData({ ...workoutFormData, notes: e.target.value })}
+                      rows={2}
                     />
                   </div>
                 </div>
+
                 <div className="flex justify-end space-x-3 mt-6">
-                  <button
+                  <ModernButton
                     type="button"
-                    onClick={() => {
-                      setShowWorkoutForm(false);
-                      setSelectedBlockId(null);
-                      setSelectedDay(null);
-                    }}
-                    className="px-4 py-2 text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
-                    disabled={isSubmitting}
+                    variant="outline"
+                    onClick={() => setShowWorkoutForm(false)}
                   >
                     Cancel
-                  </button>
-                  <button
+                  </ModernButton>
+                  <ModernButton
                     type="submit"
-                    disabled={isSubmitting}
-                    className={`px-4 py-2 bg-blue-600 text-white rounded-lg ${
-                      isSubmitting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'
-                    }`}
+                    variant="primary"
+                    isLoading={isSubmitting}
                   >
-                    {isSubmitting ? 'Adding...' : 'Add Workout'}
-                  </button>
+                    Add Exercise
+                  </ModernButton>
                 </div>
               </form>
             </div>
           </div>
         )}
       </div>
-    </DashboardLayout>
+    </ModernLayout>
   );
 } 

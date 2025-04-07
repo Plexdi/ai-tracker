@@ -7,15 +7,24 @@ export function middleware(request: NextRequest) {
   const authCookie = request.cookies.get('auth-state');
   const url = request.nextUrl.clone();
   const isAuthPage = url.pathname === '/login' || url.pathname === '/signup';
+  const isProtectedRoute = url.pathname.startsWith('/dashboard') || 
+                          url.pathname.startsWith('/plan') || 
+                          url.pathname.startsWith('/progress') || 
+                          url.pathname.startsWith('/log-lift') || 
+                          url.pathname.startsWith('/ai') ||
+                          url.pathname.startsWith('/profile') ||
+                          url.pathname.startsWith('/profile-card-demo') ||
+                          url.pathname.startsWith('/horizontal-profile-demo');
   
-  // If no auth cookie is set, let the client-side Firebase auth handle it
-  if (!authCookie) {
-    return NextResponse.next();
+  // If user is authenticated and trying to access auth pages, redirect to dashboard
+  if (authCookie?.value === 'authenticated' && isAuthPage) {
+    url.pathname = '/dashboard';
+    return NextResponse.redirect(url);
   }
 
-  // If auth cookie exists and we're on auth page, redirect to dashboard
-  if (authCookie.value === 'authenticated' && isAuthPage) {
-    url.pathname = '/dashboard';
+  // If user is not authenticated and trying to access protected routes, redirect to login
+  if (!authCookie?.value && isProtectedRoute) {
+    url.pathname = '/login';
     return NextResponse.redirect(url);
   }
 
@@ -25,5 +34,16 @@ export function middleware(request: NextRequest) {
 
 // See "Matching Paths" below to learn more
 export const config = {
-  matcher: ['/login', '/signup', '/dashboard/:path*', '/plan/:path*', '/progress/:path*', '/log-lift/:path*', '/ai/:path*'],
+  matcher: [
+    '/login',
+    '/signup',
+    '/dashboard/:path*',
+    '/plan/:path*',
+    '/progress/:path*',
+    '/log-lift/:path*',
+    '/ai/:path*',
+    '/profile/:path*',
+    '/profile-card-demo/:path*',
+    '/horizontal-profile-demo/:path*'
+  ],
 }; 

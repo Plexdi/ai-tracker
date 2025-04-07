@@ -7,6 +7,7 @@ import { useStore } from '../lib/zustandStore';
 import { signOut as firebaseSignOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
 import { deleteCookie } from 'cookies-next';
+import { toast } from 'react-hot-toast';
 
 interface NavItem {
   href: string;
@@ -20,6 +21,7 @@ const navItems: NavItem[] = [
   { href: '/progress', label: 'Progress', icon: '📈' },
   { href: '/plan', label: 'Plan', icon: '📅' },
   { href: '/ai', label: 'AI Assistant', icon: '🤖' },
+  { href: '/profile', label: 'Profile', icon: '👤' },
 ];
 
 export default function DashboardLayout({ children }: { children: ReactNode }) {
@@ -28,16 +30,21 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
   const currentUser = useStore((state) => state.currentUser);
   const setCurrentUser = useStore((state) => state.setCurrentUser);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   const handleSignOut = async () => {
+    setIsSigningOut(true);
     try {
       await firebaseSignOut(auth);
-      // Clear auth cookie on sign out
       deleteCookie('auth-state');
       setCurrentUser(null);
+      toast.success('Signed out successfully');
       router.push('/login');
     } catch (error) {
       console.error('Error signing out:', error);
+      toast.error('Failed to sign out');
+    } finally {
+      setIsSigningOut(false);
     }
   };
 
@@ -94,9 +101,14 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
         </div>
         <button
           onClick={handleSignOut}
-          className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+          disabled={isSigningOut}
+          className="p-1.5 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          <span className="text-sm">⇥</span>
+          {isSigningOut ? (
+            <div className="w-4 h-4 border-2 border-gray-500 border-t-transparent rounded-full animate-spin"></div>
+          ) : (
+            <span className="text-sm">⇥</span>
+          )}
         </button>
       </div>
     </div>
