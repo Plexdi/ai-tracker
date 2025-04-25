@@ -175,19 +175,31 @@ function generateDefaultDays(daysPerWeek: number, template: SplitTemplateType): 
           days.push({
             name: 'Push',
             focus: ['Chest', 'Shoulders', 'Triceps'],
-            notes: 'Focus on pressing movements'
+            exercises: [
+              { exercise: 'Bench Press', sets: 4, reps: 8 },
+              { exercise: 'Overhead Press', sets: 3, reps: 10 },
+              { exercise: 'Tricep Pushdowns', sets: 3, reps: 12 }
+            ]
           });
         } else if (cycle === 1) {
           days.push({
             name: 'Pull',
             focus: ['Back', 'Biceps', 'Rear Delts'],
-            notes: 'Focus on pulling movements'
+            exercises: [
+              { exercise: 'Pull-ups', sets: 4, reps: 8 },
+              { exercise: 'Barbell Rows', sets: 3, reps: 10 },
+              { exercise: 'Bicep Curls', sets: 3, reps: 12 }
+            ]
           });
         } else {
           days.push({
             name: 'Legs',
             focus: ['Quads', 'Hamstrings', 'Calves'],
-            notes: 'Focus on lower body'
+            exercises: [
+              { exercise: 'Squats', sets: 4, reps: 8 },
+              { exercise: 'Romanian Deadlifts', sets: 3, reps: 10 },
+              { exercise: 'Calf Raises', sets: 3, reps: 15 }
+            ]
           });
         }
       }
@@ -201,19 +213,31 @@ function generateDefaultDays(daysPerWeek: number, template: SplitTemplateType): 
           days.push({
             name: 'Chest & Back',
             focus: ['Chest', 'Back'],
-            notes: 'Alternating chest and back exercises'
+            exercises: [
+              { exercise: 'Bench Press', sets: 4, reps: 8 },
+              { exercise: 'Pull-ups', sets: 4, reps: 8 },
+              { exercise: 'Incline Press', sets: 3, reps: 10 }
+            ]
           });
         } else if (cycle === 1) {
           days.push({
             name: 'Shoulders & Arms',
             focus: ['Shoulders', 'Biceps', 'Triceps'],
-            notes: 'Focus on upper body isolation'
+            exercises: [
+              { exercise: 'Overhead Press', sets: 4, reps: 8 },
+              { exercise: 'Bicep Curls', sets: 3, reps: 10 },
+              { exercise: 'Tricep Pushdowns', sets: 3, reps: 12 }
+            ]
           });
         } else {
           days.push({
             name: 'Legs',
             focus: ['Quads', 'Hamstrings', 'Calves'],
-            notes: 'Complete lower body workout'
+            exercises: [
+              { exercise: 'Squats', sets: 4, reps: 8 },
+              { exercise: 'Romanian Deadlifts', sets: 3, reps: 10 },
+              { exercise: 'Calf Raises', sets: 3, reps: 15 }
+            ]
           });
         }
       }
@@ -227,13 +251,21 @@ function generateDefaultDays(daysPerWeek: number, template: SplitTemplateType): 
           days.push({
             name: 'Upper Body',
             focus: ['Chest', 'Back', 'Shoulders', 'Arms'],
-            notes: 'Complete upper body training'
+            exercises: [
+              { exercise: 'Bench Press', sets: 4, reps: 8 },
+              { exercise: 'Pull-ups', sets: 4, reps: 8 },
+              { exercise: 'Overhead Press', sets: 3, reps: 10 }
+            ]
           });
         } else {
           days.push({
             name: 'Lower Body',
             focus: ['Quads', 'Hamstrings', 'Glutes', 'Calves'],
-            notes: 'Complete lower body training'
+            exercises: [
+              { exercise: 'Squats', sets: 4, reps: 8 },
+              { exercise: 'Romanian Deadlifts', sets: 3, reps: 10 },
+              { exercise: 'Calf Raises', sets: 3, reps: 15 }
+            ]
           });
         }
       }
@@ -245,7 +277,11 @@ function generateDefaultDays(daysPerWeek: number, template: SplitTemplateType): 
         days.push({
           name: `Full Body ${i + 1}`,
           focus: ['Chest', 'Back', 'Legs', 'Arms', 'Core'],
-          notes: 'Complete full body workout'
+          exercises: [
+            { exercise: 'Squats', sets: 3, reps: 8 },
+            { exercise: 'Bench Press', sets: 3, reps: 8 },
+            { exercise: 'Pull-ups', sets: 3, reps: 8 }
+          ]
         });
       }
       break;
@@ -256,7 +292,7 @@ function generateDefaultDays(daysPerWeek: number, template: SplitTemplateType): 
         days.push({
           name: `Day ${i + 1}`,
           focus: [],
-          notes: ''
+          exercises: []
         });
       }
       break;
@@ -267,7 +303,7 @@ function generateDefaultDays(daysPerWeek: number, template: SplitTemplateType): 
         days.push({
           name: `Day ${i + 1}`,
           focus: [],
-          notes: ''
+          exercises: []
         });
       }
       break;
