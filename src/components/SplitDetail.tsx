@@ -144,13 +144,6 @@ export default function SplitDetail({ split, onUpdateDay, onUpdateSplit, onBack 
                 </div>
               </div>
               
-              {day.notes && (
-                <div>
-                  <div className="text-sm text-slate-400 mb-1">Notes</div>
-                  <p className="text-slate-300 text-sm">{day.notes}</p>
-                </div>
-              )}
-              
               {(day.programId || day.blockId) && (
                 <div className="mt-3 pt-3 border-t border-slate-800">
                   <div className="text-sm text-slate-400 mb-1">Linked To</div>
@@ -159,6 +152,19 @@ export default function SplitDetail({ split, onUpdateDay, onUpdateSplit, onBack 
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
                     </svg>
                     Program Block
+                  </div>
+                </div>
+              )}
+              
+              {day.exercises && day.exercises.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-slate-800">
+                  <div className="text-sm text-slate-400 mb-1">Exercises</div>
+                  <div className="space-y-2">
+                    {day.exercises.map((exercise, index) => (
+                      <div key={index} className="text-slate-300 text-sm">
+                        {exercise.exercise}: {exercise.sets}×{exercise.reps} @RPE {exercise.rpe}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -174,6 +180,7 @@ export default function SplitDetail({ split, onUpdateDay, onUpdateSplit, onBack 
           onClose={() => setIsEditModalOpen(false)}
           day={split.days[editingDayIndex]}
           dayIndex={editingDayIndex}
+          userId={split.userId}
           onUpdateDay={handleUpdateDay}
         />
       )}

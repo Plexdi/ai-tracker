@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "ai-tracker": "file:",
     "chart.js": "^4.4.8",
     "cookies-next": "^5.1.0",
     "date-fns": "^4.1.0",

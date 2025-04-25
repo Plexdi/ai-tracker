@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react';
 import ModernButton from './ModernButton';
-import { SplitDay } from '@/lib/types';
+import { SplitDay, ProgramWorkout } from '@/lib/types';
+import { getCustomExercises, SUPPORTED_EXERCISES } from '@/lib/workout-service';
 
 interface EditSplitDayModalProps {
   isOpen: boolean;
   onClose: () => void;
   day: SplitDay;
   dayIndex: number;
+  userId: string;
   onUpdateDay: (dayIndex: number, updates: Partial<SplitDay>) => Promise<void>;
 }
 
@@ -30,22 +32,57 @@ export default function EditSplitDayModal({
   isOpen, 
   onClose, 
   day, 
-  dayIndex, 
+  dayIndex,
+  userId,
   onUpdateDay 
 }: EditSplitDayModalProps) {
   const [name, setName] = useState<string>(day.name);
   const [focus, setFocus] = useState<string[]>(day.focus);
-  const [notes, setNotes] = useState<string>(day.notes || '');
+  const [exercises, setExercises] = useState<ProgramWorkout[]>(day.exercises || []);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [newFocus, setNewFocus] = useState<string>('');
+  
+  // Exercise form state
+  const [newExercise, setNewExercise] = useState<{
+    name: string;
+    sets: number;
+    reps: number;
+    rpe?: number;
+  }>({
+    name: '',
+    sets: 3,
+    reps: 8,
+    rpe: 7
+  });
+  const [customExercises, setCustomExercises] = useState<string[]>([]);
+  const [isLoadingExercises, setIsLoadingExercises] = useState<boolean>(false);
+
+  // Load custom exercises
+  useEffect(() => {
+    const loadCustomExercises = async () => {
+      try {
+        setIsLoadingExercises(true);
+        const exercises = await getCustomExercises(userId);
+        setCustomExercises(exercises.map(e => e.name));
+      } catch (error) {
+        console.error('Error loading custom exercises:', error);
+      } finally {
+        setIsLoadingExercises(false);
+      }
+    };
+    
+    if (isOpen) {
+      loadCustomExercises();
+    }
+  }, [isOpen, userId]);
 
   // Reset form when modal is opened with a different day
   useEffect(() => {
     if (isOpen) {
       setName(day.name);
       setFocus(day.focus);
-      setNotes(day.notes || '');
+      setExercises(day.exercises || []);
       setError(null);
     }
   }, [isOpen, day]);
@@ -67,7 +104,7 @@ export default function EditSplitDayModal({
       await onUpdateDay(dayIndex, {
         name,
         focus,
-        notes: notes.trim() ? notes : undefined
+        exercises
       });
       
       handleClose();
@@ -90,6 +127,44 @@ export default function EditSplitDayModal({
     const newFocusList = [...focus];
     newFocusList.splice(index, 1);
     setFocus(newFocusList);
+  };
+
+  const handleAddExercise = () => {
+    if (!newExercise.name.trim()) {
+      setError('Exercise name is required');
+      return;
+    }
+
+    const exercise: ProgramWorkout = {
+      exercise: newExercise.name,
+      sets: newExercise.sets,
+      reps: newExercise.reps,
+      rpe: newExercise.rpe
+    };
+
+    setExercises([...exercises, exercise]);
+    setNewExercise({
+      name: '',
+      sets: 3,
+      reps: 8,
+      rpe: 7
+    });
+    setError(null);
+  };
+
+  const handleRemoveExercise = (index: number) => {
+    const newExercises = [...exercises];
+    newExercises.splice(index, 1);
+    setExercises(newExercises);
+  };
+
+  const handleUpdateExercise = (index: number, updates: Partial<ProgramWorkout>) => {
+    const newExercises = [...exercises];
+    newExercises[index] = {
+      ...newExercises[index],
+      ...updates
+    };
+    setExercises(newExercises);
   };
 
   // If modal is not open, don't render anything
@@ -183,20 +258,138 @@ export default function EditSplitDayModal({
               </div>
             </div>
             
-            {/* Notes */}
+            {/* Exercises */}
             <div>
-              <label htmlFor="day-notes" className="block text-sm font-medium text-white mb-1">
-                Notes
+              <label className="block text-sm font-medium text-white mb-1">
+                Exercises
               </label>
-              <textarea
-                id="day-notes"
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={3}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800/80 text-white p-2.5
-                          focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Any additional notes for this training day..."
-              />
+              
+              <div className="space-y-2 mb-4">
+                {exercises.map((exercise, index) => (
+                  <div 
+                    key={index}
+                    className="bg-slate-800/60 p-3 rounded-lg border border-slate-700"
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex-1">
+                        <input
+                          type="text"
+                          value={exercise.exercise}
+                          onChange={(e) => handleUpdateExercise(index, { exercise: e.target.value })}
+                          className="w-full bg-slate-700/50 text-white p-1.5 rounded border border-slate-600
+                                    focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveExercise(index)}
+                        className="ml-2 text-slate-400 hover:text-red-400"
+                      >
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="text-xs text-slate-400">Sets</label>
+                        <input
+                          type="number"
+                          value={exercise.sets}
+                          onChange={(e) => handleUpdateExercise(index, { sets: parseInt(e.target.value) })}
+                          className="w-full bg-slate-700/50 text-white p-1.5 rounded border border-slate-600
+                                    focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          min="1"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-400">Reps</label>
+                        <input
+                          type="number"
+                          value={exercise.reps}
+                          onChange={(e) => handleUpdateExercise(index, { reps: parseInt(e.target.value) })}
+                          className="w-full bg-slate-700/50 text-white p-1.5 rounded border border-slate-600
+                                    focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          min="1"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs text-slate-400">RPE</label>
+                        <input
+                          type="number"
+                          value={exercise.rpe}
+                          onChange={(e) => handleUpdateExercise(index, { rpe: parseInt(e.target.value) })}
+                          className="w-full bg-slate-700/50 text-white p-1.5 rounded border border-slate-600
+                                    focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          min="1"
+                          max="10"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="bg-slate-800/60 p-3 rounded-lg border border-slate-700">
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <div>
+                    <label className="text-xs text-slate-400">Exercise Name</label>
+                    <input
+                      type="text"
+                      value={newExercise.name}
+                      onChange={(e) => setNewExercise({ ...newExercise, name: e.target.value })}
+                      className="w-full bg-slate-700/50 text-white p-1.5 rounded border border-slate-600
+                                focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter exercise name"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400">Sets</label>
+                    <input
+                      type="number"
+                      value={newExercise.sets}
+                      onChange={(e) => setNewExercise({ ...newExercise, sets: parseInt(e.target.value) })}
+                      className="w-full bg-slate-700/50 text-white p-1.5 rounded border border-slate-600
+                                focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      min="1"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <div>
+                    <label className="text-xs text-slate-400">Reps</label>
+                    <input
+                      type="number"
+                      value={newExercise.reps}
+                      onChange={(e) => setNewExercise({ ...newExercise, reps: parseInt(e.target.value) })}
+                      className="w-full bg-slate-700/50 text-white p-1.5 rounded border border-slate-600
+                                focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      min="1"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400">RPE</label>
+                    <input
+                      type="number"
+                      value={newExercise.rpe}
+                      onChange={(e) => setNewExercise({ ...newExercise, rpe: parseInt(e.target.value) })}
+                      className="w-full bg-slate-700/50 text-white p-1.5 rounded border border-slate-600
+                                focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      min="1"
+                      max="10"
+                    />
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddExercise}
+                  disabled={!newExercise.name.trim()}
+                  className="w-full bg-blue-600 text-white rounded-lg px-3 py-2 hover:bg-blue-700 
+                           disabled:bg-slate-700 disabled:text-slate-400"
+                >
+                  Add Exercise
+                </button>
+              </div>
             </div>
             
             {error && (

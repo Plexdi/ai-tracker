@@ -100,7 +100,7 @@ export type SplitTemplateType = 'PPL' | 'Arnold' | 'UpperLower' | 'FullBody' | '
 export interface SplitDay {
   name: string;
   focus: string[];
-  notes?: string;
+  exercises: ProgramWorkout[];
   programId?: string;
   blockId?: string;
 }
