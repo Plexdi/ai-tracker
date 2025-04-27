@@ -346,7 +346,10 @@ async function handleAddExercise(userId: string, programId: string, data: any) {
       exercise: data.exercise,
       sets: data.sets || 3,
       reps: data.reps || 8,
-      rpe: data.rpe !== undefined ? data.rpe : 7,
+      intensity: {
+        type: data.intensityType || 'rpe',
+        value: data.intensityValue !== undefined ? data.intensityValue : 7
+      },
       notes: data.notes || ''
     };
     
@@ -367,7 +370,7 @@ async function handleAddExercise(userId: string, programId: string, data: any) {
     await updateWeekWorkouts(userId, programId, data.blockId, data.weekNumber, updatedWeek);
     
     return NextResponse.json({ 
-      message: `Added ${data.exercise}: ${data.sets}×${data.reps} @RPE ${data.rpe} to ${data.day} in week ${data.weekNumber}`,
+      message: `Added ${data.exercise}: ${data.sets}×${data.reps} @RPE ${data.intensityValue} to ${data.day} in week ${data.weekNumber}`,
       success: true
     });
   } catch (error) {
@@ -558,7 +561,10 @@ async function handleModifyExercise(userId: string, programId: string, data: any
       exercise: data.exercise || exercises[data.exerciseIndex].exercise,
       sets: data.sets !== undefined ? data.sets : exercises[data.exerciseIndex].sets,
       reps: data.reps !== undefined ? data.reps : exercises[data.exerciseIndex].reps,
-      rpe: data.rpe !== undefined ? data.rpe : exercises[data.exerciseIndex].rpe,
+      intensity: {
+        type: data.intensityType || 'rpe',
+        value: data.intensityValue !== undefined ? data.intensityValue : exercises[data.exerciseIndex].intensity.value
+      },
       notes: data.notes !== undefined ? data.notes : exercises[data.exerciseIndex].notes
     };
     
@@ -585,8 +591,8 @@ async function handleModifyExercise(userId: string, programId: string, data: any
     }
     if (updatedExercise.sets !== originalExercise.sets || 
         updatedExercise.reps !== originalExercise.reps || 
-        updatedExercise.rpe !== originalExercise.rpe) {
-      message += `Updated to ${updatedExercise.sets}×${updatedExercise.reps} @RPE ${updatedExercise.rpe}. `;
+        updatedExercise.intensity.value !== originalExercise.intensity.value) {
+      message += `Updated to ${updatedExercise.sets}×${updatedExercise.reps} @RPE ${updatedExercise.intensity.value}. `;
     }
     if (updatedExercise.notes !== originalExercise.notes) {
       message += `Updated notes. `;

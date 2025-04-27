@@ -176,9 +176,9 @@ function generateDefaultDays(daysPerWeek: number, template: SplitTemplateType): 
             name: 'Push',
             focus: ['Chest', 'Shoulders', 'Triceps'],
             exercises: [
-              { exercise: 'Bench Press', sets: 4, reps: 8 },
-              { exercise: 'Overhead Press', sets: 3, reps: 10 },
-              { exercise: 'Tricep Pushdowns', sets: 3, reps: 12 }
+              { exercise: 'Bench Press', sets: 4, reps: 8, intensity: { type: 'kg', value: 0 } },
+              { exercise: 'Overhead Press', sets: 3, reps: 10, intensity: { type: 'kg', value: 0 } },
+              { exercise: 'Tricep Pushdowns', sets: 3, reps: 12, intensity: { type: 'rpe', value: 8 } }
             ]
           });
         } else if (cycle === 1) {
@@ -186,9 +186,9 @@ function generateDefaultDays(daysPerWeek: number, template: SplitTemplateType): 
             name: 'Pull',
             focus: ['Back', 'Biceps', 'Rear Delts'],
             exercises: [
-              { exercise: 'Pull-ups', sets: 4, reps: 8 },
-              { exercise: 'Barbell Rows', sets: 3, reps: 10 },
-              { exercise: 'Bicep Curls', sets: 3, reps: 12 }
+              { exercise: 'Pull-ups', sets: 4, reps: 8, intensity: { type: 'rpe', value: 8 } },
+              { exercise: 'Barbell Rows', sets: 3, reps: 10, intensity: { type: 'kg', value: 0 } },
+              { exercise: 'Bicep Curls', sets: 3, reps: 12, intensity: { type: 'rpe', value: 8 } }
             ]
           });
         } else {
@@ -196,9 +196,9 @@ function generateDefaultDays(daysPerWeek: number, template: SplitTemplateType): 
             name: 'Legs',
             focus: ['Quads', 'Hamstrings', 'Calves'],
             exercises: [
-              { exercise: 'Squats', sets: 4, reps: 8 },
-              { exercise: 'Romanian Deadlifts', sets: 3, reps: 10 },
-              { exercise: 'Calf Raises', sets: 3, reps: 15 }
+              { exercise: 'Squats', sets: 4, reps: 8, intensity: { type: 'kg', value: 0 } },
+              { exercise: 'Romanian Deadlifts', sets: 3, reps: 10, intensity: { type: 'kg', value: 0 } },
+              { exercise: 'Calf Raises', sets: 3, reps: 15, intensity: { type: 'rpe', value: 8 } }
             ]
           });
         }
@@ -214,9 +214,9 @@ function generateDefaultDays(daysPerWeek: number, template: SplitTemplateType): 
             name: 'Chest & Back',
             focus: ['Chest', 'Back'],
             exercises: [
-              { exercise: 'Bench Press', sets: 4, reps: 8 },
-              { exercise: 'Pull-ups', sets: 4, reps: 8 },
-              { exercise: 'Incline Press', sets: 3, reps: 10 }
+              { exercise: 'Bench Press', sets: 4, reps: 8, intensity: { type: 'kg', value: 0 } },
+              { exercise: 'Pull-ups', sets: 4, reps: 8, intensity: { type: 'rpe', value: 8 } },
+              { exercise: 'Incline Press', sets: 3, reps: 10, intensity: { type: 'kg', value: 0 } }
             ]
           });
         } else if (cycle === 1) {
@@ -224,9 +224,9 @@ function generateDefaultDays(daysPerWeek: number, template: SplitTemplateType): 
             name: 'Shoulders & Arms',
             focus: ['Shoulders', 'Biceps', 'Triceps'],
             exercises: [
-              { exercise: 'Overhead Press', sets: 4, reps: 8 },
-              { exercise: 'Bicep Curls', sets: 3, reps: 10 },
-              { exercise: 'Tricep Pushdowns', sets: 3, reps: 12 }
+              { exercise: 'Overhead Press', sets: 4, reps: 8, intensity: { type: 'kg', value: 0 } },
+              { exercise: 'Bicep Curls', sets: 3, reps: 10, intensity: { type: 'rpe', value: 8 } },
+              { exercise: 'Tricep Pushdowns', sets: 3, reps: 12, intensity: { type: 'rpe', value: 8 } }
             ]
           });
         } else {
@@ -234,9 +234,9 @@ function generateDefaultDays(daysPerWeek: number, template: SplitTemplateType): 
             name: 'Legs',
             focus: ['Quads', 'Hamstrings', 'Calves'],
             exercises: [
-              { exercise: 'Squats', sets: 4, reps: 8 },
-              { exercise: 'Romanian Deadlifts', sets: 3, reps: 10 },
-              { exercise: 'Calf Raises', sets: 3, reps: 15 }
+              { exercise: 'Squats', sets: 4, reps: 8, intensity: { type: 'kg', value: 0 } },
+              { exercise: 'Romanian Deadlifts', sets: 3, reps: 10, intensity: { type: 'kg', value: 0 } },
+              { exercise: 'Calf Raises', sets: 3, reps: 15, intensity: { type: 'rpe', value: 8 } }
             ]
           });
         }
@@ -252,9 +252,9 @@ function generateDefaultDays(daysPerWeek: number, template: SplitTemplateType): 
             name: 'Upper Body',
             focus: ['Chest', 'Back', 'Shoulders', 'Arms'],
             exercises: [
-              { exercise: 'Bench Press', sets: 4, reps: 8 },
-              { exercise: 'Pull-ups', sets: 4, reps: 8 },
-              { exercise: 'Overhead Press', sets: 3, reps: 10 }
+              { exercise: 'Bench Press', sets: 4, reps: 8, intensity: { type: 'kg', value: 0 } },
+              { exercise: 'Pull-ups', sets: 4, reps: 8, intensity: { type: 'rpe', value: 8 } },
+              { exercise: 'Overhead Press', sets: 3, reps: 10, intensity: { type: 'kg', value: 0 } }
             ]
           });
         } else {
@@ -262,9 +262,9 @@ function generateDefaultDays(daysPerWeek: number, template: SplitTemplateType): 
             name: 'Lower Body',
             focus: ['Quads', 'Hamstrings', 'Glutes', 'Calves'],
             exercises: [
-              { exercise: 'Squats', sets: 4, reps: 8 },
-              { exercise: 'Romanian Deadlifts', sets: 3, reps: 10 },
-              { exercise: 'Calf Raises', sets: 3, reps: 15 }
+              { exercise: 'Squats', sets: 4, reps: 8, intensity: { type: 'kg', value: 0 } },
+              { exercise: 'Romanian Deadlifts', sets: 3, reps: 10, intensity: { type: 'kg', value: 0 } },
+              { exercise: 'Calf Raises', sets: 3, reps: 15, intensity: { type: 'rpe', value: 8 } }
             ]
           });
         }
@@ -278,9 +278,9 @@ function generateDefaultDays(daysPerWeek: number, template: SplitTemplateType): 
           name: `Full Body ${i + 1}`,
           focus: ['Chest', 'Back', 'Legs', 'Arms', 'Core'],
           exercises: [
-            { exercise: 'Squats', sets: 3, reps: 8 },
-            { exercise: 'Bench Press', sets: 3, reps: 8 },
-            { exercise: 'Pull-ups', sets: 3, reps: 8 }
+            { exercise: 'Squats', sets: 3, reps: 8, intensity: { type: 'kg', value: 0 } },
+            { exercise: 'Bench Press', sets: 3, reps: 8, intensity: { type: 'kg', value: 0 } },
+            { exercise: 'Pull-ups', sets: 3, reps: 8, intensity: { type: 'rpe', value: 8 } }
           ]
         });
       }

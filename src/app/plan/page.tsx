@@ -855,7 +855,13 @@ export default function PlanPage() {
                                           </div>
                                           <div className="text-slate-300 flex gap-2 mt-1">
                                             <span>{workout.sets} × {workout.reps}</span>
-                                            {workout.rpe && <span>@RPE {workout.rpe}</span>}
+                                            {workout.intensity && (
+                                              <span>
+                                                {workout.intensity.type === 'kg' && `@${workout.intensity.value}kg`}
+                                                {workout.intensity.type === 'rpe' && `@RPE ${workout.intensity.value}`}
+                                                {workout.intensity.type === 'percent' && `@${workout.intensity.value}%`}
+                                              </span>
+                                            )}
                                           </div>
                                           {workout.notes && (
                                             <p className="mt-1 text-slate-400 text-xs">{workout.notes}</p>

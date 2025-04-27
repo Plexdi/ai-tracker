@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
-import { WeekDay, ProgramWorkout } from '@/lib/types';
+import { WeekDay, ProgramWorkout, WeekSchedule, ALL_WEEK_DAYS } from '@/lib/types';
 import ModernButton from '@/components/ModernButton';
 import { SUPPORTED_EXERCISES, getCustomExercises, CustomExercise } from '@/lib/workout-service';
+import { toast } from 'react-hot-toast';
+import { updateWeekWorkouts } from '@/lib/program-service';
 
 interface BlockExerciseFormProps {
   day: WeekDay;
@@ -9,20 +11,49 @@ interface BlockExerciseFormProps {
   onAddExercise: (exercise: ProgramWorkout) => Promise<void>;
   onClose: () => void;
   userId: string;
+  selectedBlockId: string;
+  selectedDay: WeekDay;
+  selectedWeek: number;
+  program: any; // TODO: Add proper type
+  currentUser: any; // TODO: Add proper type
 }
+
+const validateWorkoutForm = (data: ProgramWorkout): string | null => {
+  if (!data.exercise.trim()) {
+    return 'Exercise is required';
+  }
+  if (data.sets < 1) {
+    return 'Sets must be at least 1';
+  }
+  if (data.reps < 1) {
+    return 'Reps must be at least 1';
+  }
+  if (data.intensity.type === 'rpe' && (data.intensity.value < 1 || data.intensity.value > 10)) {
+    return 'RPE must be between 1 and 10';
+  }
+  return null;
+};
 
 export default function BlockExerciseForm({ 
   day, 
   weekNumber, 
   onAddExercise, 
   onClose,
-  userId
+  userId,
+  selectedBlockId,
+  selectedDay,
+  selectedWeek,
+  program,
+  currentUser
 }: BlockExerciseFormProps) {
-  const [formData, setFormData] = useState<ProgramWorkout>({
-    exercise: '',
+  const [workoutFormData, setWorkoutFormData] = useState<ProgramWorkout>({
+    exercise: SUPPORTED_EXERCISES[0],
     sets: 3,
     reps: 8,
-    rpe: 7,
+    intensity: {
+      type: 'rpe',
+      value: 7
+    }
   });
   
   const [customExercises, setCustomExercises] = useState<CustomExercise[]>([]);
@@ -52,38 +83,59 @@ export default function BlockExerciseForm({
     ...customExercises.map(ex => ex.name)
   ];
   
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleAddWorkout = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
-    
-    // Validate form data
-    if (!formData.exercise) {
-      setError('Please select an exercise');
+    if (!selectedBlockId || !selectedDay || !program || selectedWeek === null || !currentUser?.id) {
+      toast.error('Unable to add workout: Missing required information');
       return;
     }
-    
-    if (formData.sets < 1) {
-      setError('Sets must be at least 1');
+
+    const validationError = validateWorkoutForm(workoutFormData);
+    if (validationError) {
+      toast.error(validationError);
       return;
     }
-    
-    if (formData.reps < 1) {
-      setError('Reps must be at least 1');
-      return;
-    }
-    
-    if (formData.rpe !== undefined && (formData.rpe < 1 || formData.rpe > 10)) {
-      setError('RPE must be between 1 and 10');
-      return;
-    }
-    
+
     setIsSubmitting(true);
     try {
-      await onAddExercise(formData);
+      const block = program.blocks?.find((b: any) => b.id === selectedBlockId);
+      if (!block) {
+        toast.error('Block not found');
+        return;
+      }
+
+      // Ensure the week exists and has a valid structure
+      const weekSchedule = block.weeks?.[selectedWeek] || {
+        days: ALL_WEEK_DAYS.reduce((acc: Record<WeekDay, ProgramWorkout[]>, day: WeekDay) => {
+          acc[day] = [];
+          return acc;
+        }, {} as Record<WeekDay, ProgramWorkout[]>),
+        notes: ''
+      };
+
+      const updatedWeekSchedule: WeekSchedule = {
+        ...weekSchedule,
+        days: {
+          ...weekSchedule.days,
+          [selectedDay]: [...(weekSchedule.days?.[selectedDay] || []), workoutFormData]
+        }
+      };
+
+      await updateWeekWorkouts(currentUser.id, program.id, selectedBlockId, selectedWeek, updatedWeekSchedule);
       onClose();
+      setWorkoutFormData({
+        exercise: SUPPORTED_EXERCISES[0],
+        sets: 3,
+        reps: 8,
+        intensity: {
+          type: 'rpe',
+          value: 7
+        }
+      });
+      toast.success('Workout added successfully!');
     } catch (error) {
-      console.error('Error adding exercise:', error);
-      setError('Failed to add exercise. Please try again.');
+      console.error('Failed to add workout:', error);
+      toast.error('Failed to add workout');
     } finally {
       setIsSubmitting(false);
     }
@@ -102,7 +154,7 @@ export default function BlockExerciseForm({
           </div>
         )}
         
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleAddWorkout}>
           <div className="space-y-4">
             <div>
               <div className="flex justify-between items-center mb-1">
@@ -120,8 +172,8 @@ export default function BlockExerciseForm({
               <select
                 id="exercise"
                 className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={formData.exercise}
-                onChange={(e) => setFormData({ ...formData, exercise: e.target.value })}
+                value={workoutFormData.exercise}
+                onChange={(e) => setWorkoutFormData({ ...workoutFormData, exercise: e.target.value })}
                 required
               >
                 <option value="">Select an exercise</option>
@@ -150,8 +202,8 @@ export default function BlockExerciseForm({
                   type="number"
                   id="sets"
                   className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={formData.sets}
-                  onChange={(e) => setFormData({ ...formData, sets: parseInt(e.target.value) })}
+                  value={workoutFormData.sets}
+                  onChange={(e) => setWorkoutFormData({ ...workoutFormData, sets: parseInt(e.target.value) })}
                   min="1"
                   required
                 />
@@ -164,40 +216,63 @@ export default function BlockExerciseForm({
                   type="number"
                   id="reps"
                   className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={formData.reps}
-                  onChange={(e) => setFormData({ ...formData, reps: parseInt(e.target.value) })}
+                  value={workoutFormData.reps}
+                  onChange={(e) => setWorkoutFormData({ ...workoutFormData, reps: parseInt(e.target.value) })}
                   min="1"
                   required
                 />
               </div>
               <div>
-                <label htmlFor="rpe" className="block text-sm font-medium text-slate-300 mb-1">
-                  RPE
+                <label htmlFor="intensity" className="block text-sm font-medium text-slate-300 mb-1">
+                  Intensity
                 </label>
-                <input
-                  type="number"
-                  id="rpe"
-                  className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  value={formData.rpe || ''}
-                  onChange={(e) => setFormData({ ...formData, rpe: parseInt(e.target.value) })}
-                  min="1"
-                  max="10"
-                  step="0.5"
-                />
+                <div className="flex space-x-1">
+                  <select
+                    id="intensityType"
+                    className="flex-1 px-4 py-2 bg-slate-800 border border-slate-700 rounded-l-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={workoutFormData.intensity.type}
+                    onChange={(e) => setWorkoutFormData({ 
+                      ...workoutFormData, 
+                      intensity: { 
+                        ...workoutFormData.intensity, 
+                        type: e.target.value as 'kg' | 'rpe' | 'percent' 
+                      } 
+                    })}
+                  >
+                    <option value="kg">KG</option>
+                    <option value="rpe">RPE</option>
+                    <option value="percent">%</option>
+                  </select>
+                  <input
+                    type="number"
+                    id="intensityValue"
+                    className="w-20 px-4 py-2 bg-slate-800 border border-slate-700 rounded-r-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    value={workoutFormData.intensity.value}
+                    onChange={(e) => setWorkoutFormData({ 
+                      ...workoutFormData, 
+                      intensity: { 
+                        ...workoutFormData.intensity, 
+                        value: parseFloat(e.target.value) 
+                      } 
+                    })}
+                    min="0"
+                    max={workoutFormData.intensity.type === 'rpe' ? 10 : 1000}
+                    step={workoutFormData.intensity.type === 'percent' ? 1 : 0.5}
+                  />
+                </div>
               </div>
             </div>
             
             <div>
-              <label htmlFor="notes" className="block text-sm font-medium text-slate-300 mb-1">
+              <label htmlFor="workoutNotes" className="block text-sm font-medium text-slate-300 mb-1">
                 Notes (Optional)
               </label>
               <textarea
-                id="notes"
+                id="workoutNotes"
                 className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                value={formData.notes || ''}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                value={workoutFormData.notes || ''}
+                onChange={(e) => setWorkoutFormData({ ...workoutFormData, notes: e.target.value })}
                 rows={2}
-                placeholder="e.g., Pause at bottom, explosive concentric"
               />
             </div>
           </div>

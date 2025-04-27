@@ -57,7 +57,10 @@ export interface ProgramWorkout {
   exercise: string;
   sets: number;
   reps: number;
-  rpe?: number;
+  intensity: {
+    type: 'kg' | 'rpe' | 'percent';
+    value: number;
+  };
   notes?: string;
 }
 

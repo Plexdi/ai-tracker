@@ -162,7 +162,15 @@ export default function SplitDetail({ split, onUpdateDay, onUpdateSplit, onBack 
                   <div className="space-y-2">
                     {day.exercises.map((exercise, index) => (
                       <div key={index} className="text-slate-300 text-sm">
-                        {exercise.exercise}: {exercise.sets}×{exercise.reps} @RPE {exercise.rpe}
+                        {exercise.exercise}: {exercise.sets}×{exercise.reps}
+                        {exercise.intensity && (
+                          <>
+                            {' @'}
+                            {exercise.intensity.type === 'kg' && `${exercise.intensity.value}kg`}
+                            {exercise.intensity.type === 'rpe' && `RPE ${exercise.intensity.value}`}
+                            {exercise.intensity.type === 'percent' && `${exercise.intensity.value}%`}
+                          </>
+                        )}
                       </div>
                     ))}
                   </div>

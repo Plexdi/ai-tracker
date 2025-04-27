@@ -48,12 +48,18 @@ export default function EditSplitDayModal({
     name: string;
     sets: number;
     reps: number;
-    rpe?: number;
+    intensity: {
+      type: 'kg' | 'rpe' | 'percent';
+      value: number;
+    };
   }>({
     name: '',
     sets: 3,
     reps: 8,
-    rpe: 7
+    intensity: {
+      type: 'kg',
+      value: 0
+    }
   });
   const [customExercises, setCustomExercises] = useState<string[]>([]);
   const [isLoadingExercises, setIsLoadingExercises] = useState<boolean>(false);
@@ -139,7 +145,7 @@ export default function EditSplitDayModal({
       exercise: newExercise.name,
       sets: newExercise.sets,
       reps: newExercise.reps,
-      rpe: newExercise.rpe
+      intensity: newExercise.intensity
     };
 
     setExercises([...exercises, exercise]);
@@ -147,7 +153,10 @@ export default function EditSplitDayModal({
       name: '',
       sets: 3,
       reps: 8,
-      rpe: 7
+      intensity: {
+        type: 'kg',
+        value: 0
+      }
     });
     setError(null);
   };
@@ -314,16 +323,39 @@ export default function EditSplitDayModal({
                         />
                       </div>
                       <div>
-                        <label className="text-xs text-slate-400">RPE</label>
-                        <input
-                          type="number"
-                          value={exercise.rpe}
-                          onChange={(e) => handleUpdateExercise(index, { rpe: parseInt(e.target.value) })}
-                          className="w-full bg-slate-700/50 text-white p-1.5 rounded border border-slate-600
-                                    focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          min="1"
-                          max="10"
-                        />
+                        <label className="text-xs text-slate-400">Intensity</label>
+                        <div className="flex space-x-1">
+                          <select
+                            value={exercise.intensity.type}
+                            onChange={(e) => handleUpdateExercise(index, { 
+                              intensity: { 
+                                ...exercise.intensity, 
+                                type: e.target.value as 'kg' | 'rpe' | 'percent' 
+                              } 
+                            })}
+                            className="flex-1 bg-slate-700/50 text-white p-1.5 rounded-l border border-slate-600
+                                      focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            <option value="kg">KG</option>
+                            <option value="rpe">RPE</option>
+                            <option value="percent">%</option>
+                          </select>
+                          <input
+                            type="number"
+                            value={exercise.intensity.value}
+                            onChange={(e) => handleUpdateExercise(index, { 
+                              intensity: { 
+                                ...exercise.intensity, 
+                                value: parseFloat(e.target.value) 
+                              } 
+                            })}
+                            className="w-20 bg-slate-700/50 text-white p-1.5 rounded-r border border-slate-600
+                                      focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            min="0"
+                            max={exercise.intensity.type === 'rpe' ? 10 : 1000}
+                            step={exercise.intensity.type === 'percent' ? 1 : 0.5}
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -368,16 +400,41 @@ export default function EditSplitDayModal({
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400">RPE</label>
-                    <input
-                      type="number"
-                      value={newExercise.rpe}
-                      onChange={(e) => setNewExercise({ ...newExercise, rpe: parseInt(e.target.value) })}
-                      className="w-full bg-slate-700/50 text-white p-1.5 rounded border border-slate-600
-                                focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      min="1"
-                      max="10"
-                    />
+                    <label className="text-xs text-slate-400">Intensity</label>
+                    <div className="flex space-x-1">
+                      <select
+                        value={newExercise.intensity.type}
+                        onChange={(e) => setNewExercise({ 
+                          ...newExercise, 
+                          intensity: { 
+                            ...newExercise.intensity, 
+                            type: e.target.value as 'kg' | 'rpe' | 'percent' 
+                          } 
+                        })}
+                        className="flex-1 bg-slate-700/50 text-white p-1.5 rounded-l border border-slate-600
+                                  focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="kg">KG</option>
+                        <option value="rpe">RPE</option>
+                        <option value="percent">%</option>
+                      </select>
+                      <input
+                        type="number"
+                        value={newExercise.intensity.value}
+                        onChange={(e) => setNewExercise({ 
+                          ...newExercise, 
+                          intensity: { 
+                            ...newExercise.intensity, 
+                            value: parseFloat(e.target.value) 
+                          } 
+                        })}
+                        className="w-20 bg-slate-700/50 text-white p-1.5 rounded-r border border-slate-600
+                                  focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        min="0"
+                        max={newExercise.intensity.type === 'rpe' ? 10 : 1000}
+                        step={newExercise.intensity.type === 'percent' ? 1 : 0.5}
+                      />
+                    </div>
                   </div>
                 </div>
                 <button
