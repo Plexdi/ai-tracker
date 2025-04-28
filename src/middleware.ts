@@ -1,49 +1,93 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+import { getAuth } from "firebase-admin/auth";
+import { initializeApp, getApps, cert } from "firebase-admin/app";
 
-// This function can be marked `async` if using `await` inside
-export function middleware(request: NextRequest) {
-  // Use a cookie to track the auth state client-side instead of fully relying on Firebase
-  // This helps with initial page loads before Firebase auth initializes
-  const authCookie = request.cookies.get('auth-state');
-  const url = request.nextUrl.clone();
-  const isAuthPage = url.pathname === '/login' || url.pathname === '/signup';
-  const isProtectedRoute = url.pathname.startsWith('/dashboard') || 
-                          url.pathname.startsWith('/plan') || 
-                          url.pathname.startsWith('/progress') || 
-                          url.pathname.startsWith('/log-lift') || 
-                          url.pathname.startsWith('/ai') ||
-                          url.pathname.startsWith('/profile') ||
-                          url.pathname.startsWith('/profile-card-demo') ||
-                          url.pathname.startsWith('/horizontal-profile-demo');
-  
-  // If user is authenticated and trying to access auth pages, redirect to dashboard
-  if (authCookie?.value === 'authenticated' && isAuthPage) {
-    url.pathname = '/dashboard';
-    return NextResponse.redirect(url);
-  }
-
-  // If user is not authenticated and trying to access protected routes, redirect to login
-  if (!authCookie?.value && isProtectedRoute) {
-    url.pathname = '/login';
-    return NextResponse.redirect(url);
-  }
-
-  // Next.js will handle the rest of the auth flow client-side
-  return NextResponse.next();
+// Initialize Firebase Admin if not already initialized
+if (!getApps().length) {
+  initializeApp({
+    credential: cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    }),
+  });
 }
 
-// See "Matching Paths" below to learn more
+// Public paths that don't require authentication
+const publicPaths = ["/", "/login", "/signup", "/api/auth"];
+
+export async function middleware(request: NextRequest) {
+  const authCookie = request.cookies.get("__session");
+  const { pathname } = request.nextUrl;
+
+  // Check if path is public
+  if (publicPaths.some(path => pathname.startsWith(path))) {
+    return NextResponse.next();
+  }
+
+  // Check for auth cookie
+  if (!authCookie?.value) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  try {
+    // Verify the Firebase ID token
+    const decodedToken = await getAuth().verifyIdToken(authCookie.value);
+    
+    // Check if token is about to expire (within 5 minutes)
+    const expirationTime = decodedToken.exp * 1000; // Convert to milliseconds
+    const currentTime = Date.now();
+    const timeUntilExpiration = expirationTime - currentTime;
+    
+    if (timeUntilExpiration < 5 * 60 * 1000) { // 5 minutes
+      // Token is about to expire, refresh it
+      const newToken = await getAuth().createCustomToken(decodedToken.uid);
+      
+      // Log token refresh for debugging
+      console.log(`[Auth] Token refreshed for user ${decodedToken.uid}`);
+      
+      // Create response with new token
+      const response = NextResponse.next();
+      response.cookies.set("__session", newToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax", // Using 'lax' for better compatibility while maintaining security
+        maxAge: 3600, // 1 hour
+        path: "/",
+      });
+      
+      return response;
+    }
+
+    return NextResponse.next();
+  } catch (error) {
+    // Log the error for debugging
+    console.error("[Auth] Token verification failed:", error);
+    
+    // Create response with error message
+    const response = NextResponse.redirect(new URL("/login", request.url));
+    response.cookies.set("auth_error", "Session expired, please log in again", {
+      httpOnly: false, // Allow client-side access for toast
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 5, // 5 seconds
+      path: "/",
+    });
+    
+    return response;
+  }
+}
+
 export const config = {
   matcher: [
-    '/login',
-    '/signup',
-    '/dashboard/:path*',
-    '/plan/:path*',
-    '/progress/:path*',
-    '/log-lift/:path*',
-    '/ai/:path*',
-    '/profile/:path*',
-    '/profile-card-demo/:path*',
-    '/horizontal-profile-demo/:path*'
+    /*
+     * Match all request paths except for the ones starting with:
+     * - _next/static (static files)
+     * - _next/image (image optimization files)
+     * - favicon.ico (favicon file)
+     * - public folder
+     */
+    "/((?!_next/static|_next/image|favicon.ico|public/).*)",
   ],
 }; 
