@@ -1,0 +1,4 @@
+JWT_SECRET=your-secure-secret-key
+FIREBASE_PROJECT_ID=your-project-id
+FIREBASE_CLIENT_EMAIL=your-client-email
+FIREBASE_PRIVATE_KEY=your-private-key

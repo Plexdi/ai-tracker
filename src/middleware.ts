@@ -1,18 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { getAuth } from "firebase-admin/auth";
-import { initializeApp, getApps, cert } from "firebase-admin/app";
-
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    }),
-  });
-}
+import { jwtVerify } from "jose";
 
 // Public paths that don't require authentication
 const publicPaths = ["/", "/login", "/signup", "/api/auth"];
@@ -21,6 +9,11 @@ const publicPaths = ["/", "/login", "/signup", "/api/auth"];
 const TOKEN_REFRESH_THRESHOLD = 5 * 60 * 1000; // 5 minutes
 const SESSION_COOKIE_NAME = "__session";
 const ERROR_COOKIE_NAME = "auth_error";
+
+// Get the JWT secret from environment variable
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.JWT_SECRET || "your-secret-key"
+);
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -38,33 +31,21 @@ export async function middleware(request: NextRequest) {
   }
 
   try {
-    // Verify the Firebase ID token
-    const decodedToken = await getAuth().verifyIdToken(authCookie.value);
+    // Verify the JWT token
+    const { payload } = await jwtVerify(authCookie.value, JWT_SECRET);
     
     // Check if token is about to expire
-    const expirationTime = decodedToken.exp * 1000;
+    const expirationTime = payload.exp as number * 1000;
     const currentTime = Date.now();
     const timeUntilExpiration = expirationTime - currentTime;
     
     if (timeUntilExpiration < TOKEN_REFRESH_THRESHOLD) {
-      try {
-        // Token is about to expire, refresh it
-        const newToken = await getAuth().createCustomToken(decodedToken.uid);
-        
-        // Log token refresh for debugging
-        console.log(`[Auth] Token refreshed for user ${decodedToken.uid}`);
-        
-        // Create response with new token
-        const response = NextResponse.next();
-        setSecureCookie(response, SESSION_COOKIE_NAME, newToken, {
-          maxAge: 3600, // 1 hour
-        });
-        
-        return response;
-      } catch (refreshError) {
-        console.error("[Auth] Token refresh failed:", refreshError);
-        return handleAuthError(request, "Session expired, please log in again");
-      }
+      // Token is about to expire, redirect to refresh endpoint
+      const response = NextResponse.redirect(new URL("/api/auth/refresh", request.url));
+      setSecureCookie(response, SESSION_COOKIE_NAME, authCookie.value, {
+        maxAge: 3600, // 1 hour
+      });
+      return response;
     }
 
     return NextResponse.next();
